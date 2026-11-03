@@ -18,6 +18,10 @@ namespace BetterChat.Windows;
 public sealed partial class ChatWindow
 {
     private const float ScrollStickMargin = 4f;
+
+    // Air entre la liste et la barre d'onglets, puis la zone de saisie.
+    private const float ListPaddingTop = 8f;
+    private const float ListPaddingBottom = 6f;
     private const int WidthCacheLimit = 20000;
 
     /// <summary>Mise en page d'un message pour une largeur et une police données.</summary>
@@ -75,16 +79,17 @@ public sealed partial class ChatWindow
         }
 
         // Toute la hauteur est réservée : la barre de défilement est juste, même sans tout dessiner.
-        var origin = ImGui.GetCursorScreenPos();
-        ImGui.Dummy(new Vector2(size.X - scrollbar, stack.Total));
+        var paddingTop = ListPaddingTop * S;
+        var origin = ImGui.GetCursorScreenPos() + new Vector2(0f, paddingTop);
+        ImGui.Dummy(new Vector2(size.X - scrollbar, ContentHeight));
 
         var scrollY = ImGui.GetScrollY();
         var hoverable = ImGui.IsWindowHovered();
         hoveredLinkLastFrame = hoveredLink;
         hoveredLink = null;
 
-        var visibleTop = scrollY;
-        var visibleBottom = scrollY + size.Y;
+        var visibleTop = scrollY - paddingTop;
+        var visibleBottom = visibleTop + size.Y;
         for (var i = stack.FirstVisible(visibleTop); i < stack.Count && stack.Top(i) < visibleBottom; i++)
             DrawLine(feed.Visible[i], i, origin, size.X, hoverable);
 
@@ -95,6 +100,8 @@ public sealed partial class ChatWindow
         DrawLinePopups();
         UpdateScrolling(feed, size);
     }
+
+    private float ContentHeight => stack.Total + (ListPaddingTop + ListPaddingBottom) * S;
 
     private void DrawEmptyState(Vector2 size, ChatFeed feed)
     {
@@ -534,7 +541,7 @@ public sealed partial class ChatWindow
     private void UpdateScrolling(ChatFeed feed, Vector2 size)
     {
         var scrollY = ImGui.GetScrollY();
-        var scrollMax = MathF.Max(stack.Total - size.Y, 0f);
+        var scrollMax = MathF.Max(ContentHeight - size.Y, 0f);
 
         // Comparé au bas de l'image précédente : un nouveau message allonge la liste sans décoller du bas,
         // alors que la molette ou la barre de défilement, elles, font remonter.
