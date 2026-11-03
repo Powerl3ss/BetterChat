@@ -615,6 +615,40 @@ public sealed partial class ChatWindow
             DrawJumpToBottom(size);
     }
 
+    /// <summary>Bords réels du dessin d'un texte par rapport à sa position d'écriture, sans les vides aux extrémités.</summary>
+    private static unsafe (float Left, float Right) TextInkBounds(string text)
+    {
+        var width = ImGui.CalcTextSize(text).X;
+        var font = ImGui.GetFont();
+        if (text.Length == 0 || font.FontSize <= 0f)
+            return (0f, width);
+
+        var scale = ImGui.GetFontSize() / font.FontSize;
+        var first = font.FindGlyph(text[0]);
+        var last = font.FindGlyph(text[^1]);
+        var left = first != null ? first->X0 * scale : 0f;
+        var rightGap = last != null ? (last->AdvanceX - last->X1) * scale : 0f;
+        return (left, width - rightGap);
+    }
+
+    /// <summary>Flèche tracée à la main : elle prend exactement la hauteur des lettres, à côté desquelles elle se trouve.</summary>
+    private static void DrawDownArrow(ImDrawListPtr drawList, float left, float top, float width, float height, Vector4 color)
+    {
+        var thickness = MathF.Max(1.5f, 1.5f * S);
+        var centerX = left + width / 2f;
+        var bottom = top + height;
+        var headDrop = width / 2f;
+
+        drawList.PathLineTo(new Vector2(centerX, top));
+        drawList.PathLineTo(new Vector2(centerX, bottom));
+        drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
+
+        drawList.PathLineTo(new Vector2(left, bottom - headDrop));
+        drawList.PathLineTo(new Vector2(centerX, bottom));
+        drawList.PathLineTo(new Vector2(left + width, bottom - headDrop));
+        drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
+    }
+
     /// <summary>
     /// Bouton flottant pour revenir au bas de la liste, avec le nombre de messages arrivés entre-temps.
     /// Il remonte en apparaissant, et passe au bleu quand il y a du nouveau, comme les non-lus des onglets.
@@ -630,13 +664,20 @@ public sealed partial class ChatWindow
         var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
         jumpReveal += (1f - jumpReveal) * (1f - MathF.Exp(-JumpRevealSpeed * dt));
 
-        // Flèche, espace, texte : la pilule est calculée sur ce contenu, avec la même marge de chaque côté.
-        var padding = 12f * S;
-        var iconBox = MathF.Round(ImGui.GetTextLineHeight() * 0.8f);
-        var gap = 6f * S;
+        // Tout part du dessin réel des lettres (sans les vides de la police) : la pilule se calcule autour de lui,
+        // avec des marges entières, pour que le texte tombe exactement au milieu.
+        var (inkTop, inkBottom) = DigitInk();
+        var inkHeight = inkBottom - inkTop;
+        var (textInkLeft, textInkRight) = TextInkBounds(label);
+
+        var paddingX = MathF.Round(12f * S);
+        var paddingY = MathF.Round(6f * S);
+        var gap = MathF.Round(6f * S);
+        var arrowWidth = MathF.Round(inkHeight * 0.8f);
+
         var pillSize = new Vector2(
-            MathF.Round(padding * 2f + iconBox + gap + ImGui.CalcTextSize(label).X),
-            MathF.Round(ImGui.GetTextLineHeight() + 10f * S));
+            paddingX * 2f + arrowWidth + gap + (textInkRight - textInkLeft),
+            MathF.Round(inkHeight) + paddingY * 2f);
 
         var windowPos = ImGui.GetWindowPos();
         var rest = windowPos + new Vector2((size.X - pillSize.X) / 2f, size.Y - pillSize.Y - 10f * S);
@@ -668,10 +709,11 @@ public sealed partial class ChatWindow
             drawList.AddRectFilled(min, max, Col(fill), rounding);
             drawList.AddRect(min, max, Col(hasNews ? news with { W = 0.55f } : new Vector4(1f, 1f, 1f, hovered ? 0.22f : 0.12f)), rounding);
 
-            var iconMin = new Vector2(min.X + padding, min.Y + MathF.Round((pillSize.Y - iconBox) / 2f));
-            ConfigWindow.DrawIconCentered(FontAwesomeIcon.ArrowDown, iconMin, iconMin + new Vector2(iconBox, iconBox), hasNews ? news : hovered ? TextMain : TextDim);
+            var top = min.Y + paddingY;
+            var arrowLeft = min.X + paddingX;
+            DrawDownArrow(drawList, arrowLeft, top, arrowWidth, MathF.Round(inkHeight), hasNews ? news : hovered ? TextMain : TextDim);
 
-            var textPos = new Vector2(iconMin.X + iconBox + gap, MathF.Floor(min.Y + (pillSize.Y - ImGui.GetTextLineHeight()) / 2f));
+            var textPos = new Vector2(arrowLeft + arrowWidth + gap - textInkLeft, MathF.Round(top - inkTop));
             drawList.AddText(textPos, Col(hasNews || hovered ? TextMain : new Vector4(0.82f, 0.84f, 0.89f, 1f)), label);
         }
 
