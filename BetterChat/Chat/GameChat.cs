@@ -101,7 +101,7 @@ public sealed unsafe class GameChat : IDisposable
         return rows.ToArray();
     }
 
-    /// <summary>Reprend du jeu les commandes des canaux, et le nom de Crier et Hurler : tout suit la langue du client.</summary>
+    /// <summary>Reprend du jeu les commandes des canaux. La colonne des alias est lue d'abord : c'est là que le client français range /h et /cri.</summary>
     private static void LoadGameCommands()
     {
         try
@@ -115,7 +115,7 @@ public sealed unsafe class GameChat : IDisposable
                     if (sheet.GetRowOrDefault(id) is not { } row)
                         continue;
 
-                    foreach (var text in new[] { row.ShortCommand, row.ShortAlias, row.Command, row.Alias })
+                    foreach (var text in new[] { row.ShortAlias, row.ShortCommand, row.Alias, row.Command })
                     {
                         var command = text.ExtractText();
                         if (command.Length > 1 && command[0] == '/' && !commands.Contains(command))
@@ -124,13 +124,6 @@ public sealed unsafe class GameChat : IDisposable
                 }
 
                 ChatChannels.SetCommands(kind, commands);
-
-                if (kind is ChatKind.Shout or ChatKind.Yell && sheet.GetRowOrDefault(rows[0]) is { } named)
-                {
-                    var name = named.Command.ExtractText().TrimStart('/');
-                    if (name.Length > 1)
-                        ChatKinds.Rename(kind, char.ToUpper(name[0]) + name[1..]);
-                }
             }
         }
         catch (Exception ex)
@@ -318,8 +311,8 @@ public sealed unsafe class GameChat : IDisposable
     }
 
     /// <summary>
-    /// Change de canal directement, sans passer par une commande : celles-ci dépendent de la langue du jeu
-    /// (en français, /sh n'est pas la commande attendue et le jeu répond par une erreur).
+    /// Change de canal directement, sans passer par une commande : un autre plugin ou la langue du jeu
+    /// peut changer ce qu'elle fait (/sh a déjà répondu par une erreur d'argument manquant).
     /// </summary>
     public void SwitchChannel(ChatKind kind)
     {

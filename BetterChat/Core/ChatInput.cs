@@ -106,7 +106,7 @@ public static class ChatChannels
     private static readonly Dictionary<ChatKind, string> GameShortcuts = new();
 
     /// <summary>
-    /// Les commandes d'un canal selon le jeu : elles changent avec sa langue (/sh n'est pas le même partout).
+    /// Les commandes d'un canal selon le jeu : elles changent avec sa langue.
     /// La première est celle affichée dans les menus.
     /// </summary>
     public static void SetCommands(ChatKind kind, IReadOnlyList<string> commands)
