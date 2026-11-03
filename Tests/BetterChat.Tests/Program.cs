@@ -40,6 +40,9 @@ var tests = new (string Name, Action Run)[]
     ("Séparateurs : le repère disparaît en quittant l'onglet", Tests.NewMarkerClearsOnLeave),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
+    ("Séparateurs : barre à chaque reconnexion", Tests.SessionSeparators),
+    ("Séparateurs : la connexion est gardée dans l'historique", Tests.SessionIsSaved),
+    ("Répétitions : pas d'une connexion à l'autre", Tests.RepeatsStopAtSession),
     ("Export : format lisible, sans symboles du jeu", Tests.ExportFormat),
     ("Aperçu : raccourcis remplacés, inconnus conservés", Tests.MacroExpansion),
     ("Mémoire : le combat part avant les discussions", Tests.TrimRemovesBattleFirst),
@@ -604,6 +607,53 @@ internal static class Tests
         second.Id = 42;
         Check(LineSeparators.Between(first, second, 42, Today).NewMessages, "repère");
         Check(!LineSeparators.Between(first, second, 41, Today).NewMessages, "pas ici");
+    }
+
+    private static ChatLine InSession(long session, string text = "salut")
+    {
+        var line = Line(ChatKind.Say, text, "Jean");
+        line.Session = session;
+        return line;
+    }
+
+    public static void SessionSeparators()
+    {
+        var old = InSession(0);
+        var first = InSession(5);
+        var same = InSession(5);
+        var next = InSession(9);
+
+        Check(LineSeparators.Between(old, first, null, Today).NewSession, "après l'ancien historique");
+        Check(!LineSeparators.Between(first, same, null, Today).NewSession, "même connexion");
+        Check(LineSeparators.Between(same, next, null, Today).NewSession, "reconnexion");
+        Check(!LineSeparators.Between(null, first, null, Today).NewSession, "rien en haut de la liste");
+
+        next.Id = 42;
+        var both = LineSeparators.Between(same, next, 42, Today);
+        Check(both.NewSession && !both.NewMessages, "une seule barre quand le repère tombe au même endroit");
+    }
+
+    public static void SessionIsSaved()
+    {
+        var directory = TempDirectory();
+        var store = Store(directory);
+        store.Enqueue(InSession(123));
+        store.Flush();
+
+        Same(123L, Store(directory).Load(10).Single().Session, "relu");
+    }
+
+    public static void RepeatsStopAtSession()
+    {
+        var log = new ChatLog();
+        var feed = CollapsingFeed(ChatKind.Say);
+        feed.Update(log, 0, NoMute);
+
+        log.Add(InSession(1));
+        log.Add(InSession(2));
+        feed.Update(log, 0, NoMute);
+
+        Same(2, feed.Visible.Count, "deux lignes");
     }
 
     public static void DateLabels()

@@ -72,6 +72,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ChatWindow chatWindow;
     private readonly ConfigWindow configWindow;
 
+    // Change à chaque déconnexion : les messages suivants forment une nouvelle session, marquée dans le chat.
+    private long session = DateTime.UtcNow.Ticks;
     private bool detachedWindowsDirty = true;
     private int filterVersion;
     private ulong loadedCharacter;
@@ -152,6 +154,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi += ToggleChat;
         ChatGui.ChatMessageUnhandled += OnChatMessage;
+        ClientState.Logout += OnLogout;
         Framework.Update += OnFrameworkUpdate;
     }
 
@@ -159,6 +162,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         Framework.Update -= OnFrameworkUpdate;
         ChatGui.ChatMessageUnhandled -= OnChatMessage;
+        ClientState.Logout -= OnLogout;
         PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleChat;
@@ -205,6 +209,8 @@ public sealed class Plugin : IDalamudPlugin
 
     // ------------------------------------------------------- Événements du jeu
 
+    private void OnLogout(int type, int code) => session = DateTime.UtcNow.Ticks;
+
     private void OnChatMessage(IChatMessage message)
     {
         var line = MessageConverter.Convert(message);
@@ -214,6 +220,7 @@ public sealed class Plugin : IDalamudPlugin
         // Tes propres messages n'ont pas de lien sur ton nom, et il peut être précédé de ton numéro de groupe.
         var isOwn = LocalName.Length > 0 && line.AuthorKey.EndsWith(LocalName, StringComparison.Ordinal);
         line.AuthorJob = JobOfAuthor(line, isOwn);
+        line.Session = session;
 
         // Un message masqué reste en mémoire (retirer la règle le fait réapparaître), mais il n'alerte jamais.
         if (spam.Matches(line))

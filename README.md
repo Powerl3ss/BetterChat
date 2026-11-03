@@ -23,7 +23,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Onglets détachables : sors un onglet dans sa propre fenêtre, par exemple le combat ou la compagnie libre dans un coin de l'écran.
 - Recherche dans l'onglet affiché (Ctrl + F), par mot, joueur, canal ou date : `de:Jean canal:CL date:hier`.
 - Noms, objets, cartes, quêtes, effets, annonces de recherche de groupe et adresses web cliquables. Survoler un objet, une quête ou un effet montre ses détails. Une adresse s'affiche en entier avant de s'ouvrir.
-- Une ligne « Nouveaux messages » là où tu t'es arrêté, et une autre quand la date change.
+- Une ligne « Nouveaux messages » là où tu t'es arrêté, une à chaque reconnexion et une quand la date change.
 - L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
 - Export d'une conversation dans un fichier texte (clic droit sur l'onglet).

@@ -317,6 +317,7 @@ public sealed class ChatFeed
 
     private bool IsRepeatOf(ChatLine previous, ChatLine line) =>
         previous.Kind == line.Kind &&
+        previous.Session == line.Session &&
         !ChatKinds.IsBattle(line.Kind) &&
         (line.TimeUtc - lastRepeatTime).TotalMinutes <= RepeatWindowMinutes &&
         line.BodyText.Length > 0 &&
