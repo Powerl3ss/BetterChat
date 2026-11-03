@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Dalamud.Game.Chat;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
@@ -199,8 +200,44 @@ public sealed class Plugin : IDalamudPlugin
 
         Messages.Add(line);
 
-        if (Configuration.KeepHistory && loadedCharacter != 0 && !ChatKinds.IsBattle(line.Kind))
+        // Pendant le chargement de l'historique, les messages sont écrits une fois celui-ci fusionné.
+        if (Configuration.KeepHistory && loadedCharacter != 0 && pendingHistory == null && !ChatKinds.IsBattle(line.Kind))
             History.Enqueue(line);
+    }
+
+    /// <summary>L'historique est lu : il passe avant les messages arrivés entre-temps, qui sont alors écrits à leur tour.</summary>
+    private void MergeHistory()
+    {
+        var task = pendingHistory!;
+        pendingHistory = null;
+        if (pendingHistoryCharacter != loadedCharacter)
+            return; // changé de personnage pendant la lecture
+
+        List<ChatLine> loaded;
+        try
+        {
+            loaded = task.Result;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Lecture de l'historique du chat impossible");
+            loaded = new List<ChatLine>();
+        }
+
+        var current = Messages.Lines.ToList();
+        Messages.Clear();
+        foreach (var line in loaded)
+        {
+            if (wantedKinds.Contains(line.Kind))
+                Messages.Add(line);
+        }
+
+        foreach (var line in current)
+        {
+            Messages.Add(line);
+            if (Configuration.KeepHistory && !ChatKinds.IsBattle(line.Kind))
+                History.Enqueue(line);
+        }
     }
 
     private void PlayAlertFor(ChatLine line)
@@ -217,6 +254,8 @@ public sealed class Plugin : IDalamudPlugin
         var character = CurrentCharacterId;
         if (character != 0 && character != loadedCharacter)
             LoadCharacter(character);
+        if (pendingHistory is { IsCompleted: true })
+            MergeHistory();
 
         UpdateFeeds();
 
@@ -228,30 +267,34 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    /// <summary>Un autre personnage : son historique remplace le précédent, sans perdre les messages déjà arrivés.</summary>
+    // Historique en cours de lecture (en arrière-plan), et le personnage auquel il appartient.
+    private Task<List<ChatLine>>? pendingHistory;
+    private ulong pendingHistoryCharacter;
+
+    /// <summary>
+    /// Un autre personnage : son historique remplace le précédent, sans perdre les messages déjà arrivés.
+    /// Le fichier est lu en arrière-plan (le jeu ne se fige pas), puis fusionné dans MergeHistory.
+    /// </summary>
     private void LoadCharacter(ulong character)
     {
+        // Messages reçus avant que le personnage soit connu : gardés, ils ne sont dans aucun historique.
         var early = loadedCharacter == 0 ? Messages.Lines.ToList() : new List<ChatLine>();
 
         loadedCharacter = character;
         History.SelectCharacter(character);
         RecentTells.Clear();
         Messages.Clear();
+        foreach (var line in early)
+            Messages.Add(line);
 
         if (Configuration.KeepHistory)
         {
-            foreach (var line in History.Load(Configuration.HistoryLines))
-            {
-                if (wantedKinds.Contains(line.Kind))
-                    Messages.Add(line);
-            }
+            pendingHistory = History.LoadInBackground(Configuration.HistoryLines);
+            pendingHistoryCharacter = character;
         }
-
-        foreach (var line in early)
+        else
         {
-            Messages.Add(line);
-            if (Configuration.KeepHistory && !ChatKinds.IsBattle(line.Kind))
-                History.Enqueue(line);
+            pendingHistory = null;
         }
 
         var name = LocalName;

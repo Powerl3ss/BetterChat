@@ -47,6 +47,29 @@ public sealed class ChatHistoryStore
     public List<ChatLine> Load(int maxLines)
     {
         Flush();
+        return ReadRecent(maxLines);
+    }
+
+    /// <summary>
+    /// Comme Load, mais sans bloquer le jeu : la lecture passe dans la file d'écriture,
+    /// après ce qui attend d'être écrit, et rien d'autre n'écrit le fichier pendant ce temps.
+    /// </summary>
+    public Task<List<ChatLine>> LoadInBackground(int maxLines)
+    {
+        lock (sync)
+        {
+            var task = writing.ContinueWith(_ =>
+            {
+                WriteQueue();
+                return ReadRecent(maxLines);
+            }, TaskScheduler.Default);
+            writing = task;
+            return task;
+        }
+    }
+
+    private List<ChatLine> ReadRecent(int maxLines)
+    {
         var result = new List<ChatLine>();
         string? file;
         lock (sync)

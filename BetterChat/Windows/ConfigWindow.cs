@@ -107,8 +107,25 @@ public sealed partial class ConfigWindow : Window, IDisposable
         }
     }
 
+    // --- Enregistrement différé des réglages
+    private bool savePending;
+
+    /// <summary>Demande l'enregistrement des réglages : il est fait dès que plus rien n'est en cours de modification.</summary>
+    private void SaveSoon() => savePending = true;
+
+    private void FlushSave()
+    {
+        if (!savePending)
+            return;
+        savePending = false;
+        Cfg.Save();
+    }
+
+    public override void OnClose() => FlushSave();
+
     public void Dispose()
     {
+        FlushSave();
         titleFont.Dispose();
         heroFont.Dispose();
         if (logoTask is { IsCompletedSuccessfully: true })
@@ -138,6 +155,11 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     public override void PostDraw()
     {
+        // Enregistré une fois le geste fini (curseur relâché, couleur choisie, texte validé),
+        // et non à chaque image pendant qu'on fait glisser un curseur.
+        if (savePending && !ImGui.IsAnyItemActive())
+            FlushSave();
+
         windowColors?.Dispose();
         windowColors = null;
         windowStyle?.Dispose();
@@ -453,7 +475,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         });
 
         if (changed)
-            Cfg.Save();
+            SaveSoon();
     }
 
     // =================================================================== Onglets
@@ -494,7 +516,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
         if (structureChanged)
         {
-            Cfg.Save();
+            SaveSoon();
             plugin.RebuildFeeds();
             editedTab = Math.Clamp(editedTab, 0, Cfg.Tabs.Count - 1);
         }
@@ -666,7 +688,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         if (filtersChanged)
             plugin.FiltersChanged();
         if (changed || filtersChanged)
-            Cfg.Save();
+            SaveSoon();
     }
 
     // =================================================================== Affichage
@@ -749,7 +771,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         if (changed)
         {
             plugin.Colors.Invalidate();
-            Cfg.Save();
+            SaveSoon();
         }
     }
 
@@ -857,7 +879,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         }
 
         if (changed)
-            Cfg.Save();
+            SaveSoon();
     }
 
     // =================================================================== À propos
