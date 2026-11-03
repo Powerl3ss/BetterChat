@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using BetterChat.Chat;
@@ -170,12 +171,19 @@ public sealed partial class ChatWindow
         Tip.Hint("Tab dans la saisie : canal suivant");
     }
 
+    // Menu des canaux : une ligne par canal (point et nom de sa couleur, commande à droite),
+    // le canal actif surligné et coché, puis les derniers messages privés.
+    private float ChannelRowHeight => MathF.Round(ImGui.GetTextLineHeight() + 10f * S);
+
     /// <summary>Le menu s'ouvre au-dessus de la pastille. S'il n'a pas la place (chat en haut de l'écran), il passe dessous.</summary>
     private void PlaceChannelMenu()
     {
         var gap = 6f * S;
-        var rows = (channelMenu?.Count ?? 0) + plugin.RecentTells.People.Count + 2;
-        var estimatedHeight = rows * ImGui.GetFrameHeightWithSpacing();
+        var channels = channelMenu?.Count ?? 0;
+        var tells = plugin.RecentTells.People.Count;
+        var rowStep = ChannelRowHeight + 2f * S;
+        var headers = (tells > 0 ? 2 : 1) * (ImGui.GetTextLineHeight() + 10f * S);
+        var estimatedHeight = (channels + tells) * rowStep + headers + 16f * S;
         var fitsAbove = channelPillMin.Y - gap - estimatedHeight >= ImGuiHelpers.MainViewport.Pos.Y;
 
         if (fitsAbove)
@@ -187,39 +195,148 @@ public sealed partial class ChatWindow
     private void DrawChannelMenu()
     {
         PlaceChannelMenu();
+        using var popupStyle = Tip.PushPopupStyle();
         if (!ImGui.BeginPopup("##channelMenu"))
             return;
 
-        foreach (var choice in channelMenu ?? new List<ChannelChoice>())
+        var channels = channelMenu ?? new List<ChannelChoice>();
+        var tells = plugin.RecentTells.People;
+        var current = plugin.Game.CurrentChannel;
+
+        // Largeur commune à toutes les lignes : nom le plus long + commande la plus longue.
+        var nameW = 0f;
+        var detailW = 0f;
+        foreach (var choice in channels)
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, plugin.Colors.Of(choice.Kind)))
+            nameW = MathF.Max(nameW, ImGui.CalcTextSize(choice.Label).X);
+            detailW = MathF.Max(detailW, ImGui.CalcTextSize(ChatChannels.Command(choice.Kind)).X);
+        }
+        foreach (var person in tells)
+        {
+            nameW = MathF.Max(nameW, ImGui.CalcTextSize(person.Text).X);
+            detailW = MathF.Max(detailW, ImGui.CalcTextSize(person.World).X);
+        }
+        var rowW = MathF.Max(200f * S, 24f * S + nameW + 24f * S + detailW + 30f * S);
+
+        MenuHeader(FontAwesomeIcon.CommentDots, "Canal de discussion");
+        for (var i = 0; i < channels.Count; i++)
+        {
+            var choice = channels[i];
+            if (ChannelRow($"##ch{i}", rowW, plugin.Colors.Of(choice.Kind), null, choice.Label,
+                           ChatChannels.Command(choice.Kind), current == choice.Kind))
             {
-                if (ImGui.MenuItem(choice.Label, ChatChannels.Command(choice.Kind), plugin.Game.CurrentChannel == choice.Kind))
+                plugin.Game.SwitchChannel(choice.Kind);
+                FocusInput();
+                ImGui.CloseCurrentPopup();
+            }
+        }
+
+        if (tells.Count > 0)
+        {
+            ImGui.Dummy(new Vector2(0f, 2f * S));
+            ImGui.Separator();
+            MenuHeader(FontAwesomeIcon.Envelope, "Messages privés récents");
+            var tellColor = plugin.Colors.Of(ChatKind.TellOutgoing);
+            for (var i = 0; i < tells.Count; i++)
+            {
+                var person = tells[i];
+                var active = current == ChatKind.TellOutgoing && plugin.Game.TellTarget == person.TellTarget;
+                if (ChannelRow($"##tell{i}", rowW, tellColor, FontAwesomeIcon.User, person.Text, person.World, active))
                 {
-                    plugin.Game.SwitchChannel(choice.Kind);
+                    plugin.Game.SwitchToTell(person);
                     FocusInput();
+                    ImGui.CloseCurrentPopup();
                 }
             }
         }
 
-        if (plugin.RecentTells.People.Count > 0)
-        {
-            ImGui.Separator();
-            ImGui.TextDisabled("Messages privés récents");
-            using (ImRaii.PushColor(ImGuiCol.Text, plugin.Colors.Of(ChatKind.TellOutgoing)))
-            {
-                foreach (var person in plugin.RecentTells.People)
-                {
-                    if (ImGui.MenuItem(person.TellTarget))
-                    {
-                        plugin.Game.SwitchToTell(person);
-                        FocusInput();
-                    }
-                }
-            }
-        }
+        ImGui.Dummy(new Vector2(0f, 1f * S));
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8f * S);
+        Tip.Hint("Tab dans la saisie : canal suivant");
 
         ImGui.EndPopup();
+    }
+
+    /// <summary>Petit titre de section du menu : icône et texte discrets.</summary>
+    private static void MenuHeader(FontAwesomeIcon icon, string text)
+    {
+        ImGui.Dummy(new Vector2(0f, 2f * S));
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8f * S);
+        Tip.Line(icon, Tip.Dim, text, color: Tip.Dim);
+        ImGui.Dummy(new Vector2(0f, 1f * S));
+    }
+
+    /// <summary>
+    /// Une ligne du menu : point (ou icône) et nom dans la couleur du canal, détail discret à droite,
+    /// fond teinté et coche pour le canal actif. Renvoie vrai quand on clique dessus.
+    /// </summary>
+    private bool ChannelRow(string id, float width, Vector4 color, FontAwesomeIcon? icon, string name, string detail, bool active)
+    {
+        var rowH = ChannelRowHeight;
+        var min = ImGui.GetCursorScreenPos();
+        var max = min + new Vector2(width, rowH);
+        var clicked = ImGui.InvisibleButton(id, new Vector2(width, rowH));
+        var hovered = ImGui.IsItemHovered();
+        var dl = ImGui.GetWindowDrawList();
+        var radius = 6f * S;
+
+        // Fond : teinté de la couleur du canal s'il est actif, léger au survol.
+        if (active)
+        {
+            dl.AddRectFilled(min, max, Col(color with { W = hovered ? 0.26f : 0.18f }), radius);
+            dl.AddRect(min, max, Col(color with { W = 0.40f }), radius, ImDrawFlags.None, 1f);
+        }
+        else if (hovered)
+        {
+            dl.AddRectFilled(min, max, Col(new Vector4(1f, 1f, 1f, 0.07f)), radius);
+        }
+
+        var lineH = ImGui.GetTextLineHeight();
+        var textY = min.Y + (rowH - lineH) / 2f;
+        var centerY = min.Y + rowH / 2f;
+
+        // Point de couleur, ou icône (messages privés).
+        if (icon is { } fa)
+        {
+            using (ImRaii.PushFont(UiBuilder.IconFont))
+            {
+                var glyph = fa.ToIconString();
+                var scale = 0.75f;
+                var size = ImGui.CalcTextSize(glyph) * scale;
+                dl.AddText(ImGui.GetFont(), ImGui.GetFontSize() * scale,
+                           new Vector2(min.X + 12f * S - size.X / 2f, centerY - size.Y / 2f), Col(color with { W = 1f }), glyph);
+            }
+        }
+        else
+        {
+            dl.AddCircleFilled(new Vector2(min.X + 12f * S, centerY), (active ? 4f : 3.5f) * S, Col(color with { W = 1f }));
+        }
+
+        // Nom du canal, dans sa couleur.
+        dl.AddText(new Vector2(min.X + 24f * S, textY), Col(color with { W = 1f }), name);
+
+        // Coche du canal actif, tout à droite ; la commande juste avant.
+        var right = max.X - 10f * S;
+        if (active)
+        {
+            using (ImRaii.PushFont(UiBuilder.IconFont))
+            {
+                var glyph = FontAwesomeIcon.Check.ToIconString();
+                var scale = 0.8f;
+                var size = ImGui.CalcTextSize(glyph) * scale;
+                dl.AddText(ImGui.GetFont(), ImGui.GetFontSize() * scale,
+                           new Vector2(right - size.X, centerY - size.Y / 2f), Col(color with { W = 1f }), glyph);
+            }
+        }
+        right -= 20f * S;
+
+        if (detail.Length > 0)
+        {
+            var detailSize = ImGui.CalcTextSize(detail);
+            dl.AddText(new Vector2(right - detailSize.X, textY), Col(hovered || active ? Tip.Text with { W = 0.75f } : Tip.Dim), detail);
+        }
+
+        return clicked;
     }
 
     private void DrawTextInput(float width, ChatKind channel)
