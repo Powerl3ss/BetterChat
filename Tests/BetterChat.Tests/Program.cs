@@ -36,15 +36,13 @@ var tests = new (string Name, Action Run)[]
     ("Recherche : dates relatives et formats", Tests.SearchDates),
     ("Recherche : préfixe inconnu ou date illisible restent du texte", Tests.SearchUnknownPrefixIsText),
     ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
-    ("Séparateurs : repère au premier message arrivé en ton absence", Tests.NewMarkerIsFirstUnread),
-    ("Séparateurs : le repère disparaît en quittant l'onglet", Tests.NewMarkerClearsOnLeave),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
     ("Icône : le dessin est trouvé, sans les marges ni l'ombre", Tests.IconInkFound),
     ("Icône : image vide ou illisible, l'image entière sert", Tests.IconInkFallback),
     ("Connexion : la barre apparaît tout de suite, dans tous les onglets", Tests.SessionBarInEveryTab),
     ("Connexion : ni en haut de la liste, ni deux de suite", Tests.SessionBarNotDoubled),
-    ("Connexion : pas de non-lu ni de double barre avec le repère", Tests.SessionBarIsNotUnread),
+    ("Connexion : la barre ne compte pas comme un non-lu", Tests.SessionBarIsNotUnread),
     ("Connexion : absente des résultats de recherche", Tests.SessionBarHiddenBySearch),
     ("Connexion : gardée dans l'historique", Tests.SessionBarIsSaved),
     ("Répétitions : pas d'une connexion à l'autre", Tests.RepeatsStopAtSession),
@@ -555,47 +553,6 @@ internal static class Tests
         Same(1, feed.Visible.Count, "trouvé");
     }
 
-    public static void NewMarkerIsFirstUnread()
-    {
-        var log = new ChatLog();
-        var feed = Feed(ChatKind.Say);
-        feed.Update(log, 0, NoMute);
-
-        log.Add(Line(ChatKind.Say, "un", "Jean"));
-        log.Add(Line(ChatKind.Say, "deux", "Jean"));
-        feed.Update(log, 0, NoMute);
-
-        Same(feed.Visible[0].Id, feed.FirstUnreadId, "premier non-lu");
-        feed.MarkRead();
-        Same(feed.Visible[0].Id, feed.FirstUnreadId, "lire l'onglet garde le repère à l'écran");
-
-        var active = Feed(ChatKind.Say);
-        active.IsActive = true;
-        active.Update(log, 0, NoMute);
-        log.Add(Line(ChatKind.Say, "trois", "Jean"));
-        active.Update(log, 0, NoMute);
-        Same(null, active.FirstUnreadId, "pas de repère dans l'onglet affiché");
-
-        active.MarkNewAt(active.Visible[^1].Id);
-        Same(active.Visible[^1].Id, active.FirstUnreadId, "repère posé quand on lisait plus haut");
-        active.ClearNewMarker();
-        Same(null, active.FirstUnreadId, "repère retiré");
-    }
-
-    public static void NewMarkerClearsOnLeave()
-    {
-        var log = new ChatLog();
-        var feed = Feed(ChatKind.Say);
-        feed.Update(log, 0, NoMute);
-        log.Add(Line(ChatKind.Say, "un", "Jean"));
-        feed.Update(log, 0, NoMute);
-
-        feed.IsActive = true;
-        Check(feed.FirstUnreadId != null, "encore là à l'ouverture");
-        feed.IsActive = false;
-        Same(null, feed.FirstUnreadId, "parti en quittant l'onglet");
-    }
-
     public static void DateSeparators()
     {
         var yesterday = new DateTime(2026, 11, 2, 23, 50, 0, DateTimeKind.Local).ToUniversalTime();
@@ -604,14 +561,10 @@ internal static class Tests
         var second = Line(ChatKind.Say, "b", "Jean", time: today);
         var third = Line(ChatKind.Say, "c", "Jean", time: today.AddMinutes(1));
 
-        Same(Today, LineSeparators.Between(first, second, null, Today).Day, "minuit passé");
-        Same(null, LineSeparators.Between(second, third, null, Today).Day, "même jour");
-        Same(Today.AddDays(-1), LineSeparators.Between(null, first, null, Today).Day, "premier message d'un autre jour");
-        Same(null, LineSeparators.Between(null, second, null, Today).Day, "premier message du jour");
-
-        second.Id = 42;
-        Check(LineSeparators.Between(first, second, 42, Today).NewMessages, "repère");
-        Check(!LineSeparators.Between(first, second, 41, Today).NewMessages, "pas ici");
+        Same(Today, LineSeparators.Between(first, second, Today).Day, "minuit passé");
+        Same(null, LineSeparators.Between(second, third, Today).Day, "même jour");
+        Same(Today.AddDays(-1), LineSeparators.Between(null, first, Today).Day, "premier message d'un autre jour");
+        Same(null, LineSeparators.Between(null, second, Today).Day, "premier message du jour");
     }
 
     private static void Pixel(byte[] image, int width, int x, int y, byte brightness, byte alpha)
@@ -682,13 +635,10 @@ internal static class Tests
         log.Add(bar);
         feed.Update(log, 0, NoMute);
         Same(0, feed.Unread, "la barre n'est pas un message à lire");
-        Same(null, feed.FirstUnreadId, "ni le repère");
 
-        var next = Line(ChatKind.Say, "après", "Jean");
-        log.Add(next);
+        log.Add(Line(ChatKind.Say, "après", "Jean"));
         feed.Update(log, 0, NoMute);
         Same(1, feed.Unread, "le message suivant compte");
-        Check(!LineSeparators.Between(bar, next, feed.FirstUnreadId, Today).NewMessages, "pas deux barres de suite");
     }
 
     public static void SessionBarHiddenBySearch()

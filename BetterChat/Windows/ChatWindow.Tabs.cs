@@ -250,10 +250,7 @@ public sealed partial class ChatWindow
             Tip.MenuSeparator();
 
             if (Tip.MenuItem("Marquer comme lu", FontAwesomeIcon.CheckDouble))
-            {
                 feed.MarkRead();
-                feed.ClearNewMarker();
-            }
 
             if (plugin.CanDetachTab && Tip.MenuItem("Détacher dans une fenêtre", FontAwesomeIcon.ExternalLinkAlt))
                 plugin.SetDetached(feed.Settings, true);

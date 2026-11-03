@@ -205,22 +205,19 @@ public sealed class SpamFilter
     }
 }
 
-/// <summary>Ce qui s'affiche au-dessus d'un message : le repère des nouveaux messages et le changement de date.</summary>
-public readonly record struct LineSeparators(bool NewMessages, DateTime? Day)
+/// <summary>Ce qui s'affiche au-dessus d'un message : le changement de date.</summary>
+public readonly record struct LineSeparators(DateTime? Day)
 {
-    public bool Any => NewMessages || Day != null;
+    public bool Any => Day != null;
 
-    /// <param name="firstUnreadId">Premier message arrivé pendant que l'onglet n'était pas affiché.</param>
-    public static LineSeparators Between(ChatLine? previous, ChatLine line, long? firstUnreadId, DateTime today)
+    public static LineSeparators Between(ChatLine? previous, ChatLine line, DateTime today)
     {
         var day = line.TimeUtc.ToLocalTime().Date;
         DateTime? shownDay = previous == null
             ? (day != today.Date ? day : null) // en haut de la liste, seulement si ce n'est pas aujourd'hui
             : (previous.TimeUtc.ToLocalTime().Date != day ? day : null);
 
-        // Juste sous la barre de connexion, le repère ne ferait que répéter la même chose.
-        var marked = firstUnreadId == line.Id && line.Kind != ChatKind.SessionStart && previous?.Kind != ChatKind.SessionStart;
-        return new LineSeparators(marked, shownDay);
+        return new LineSeparators(shownDay);
     }
 }
 

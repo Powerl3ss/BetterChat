@@ -609,10 +609,7 @@ public sealed class Plugin : IDalamudPlugin
         History.Delete();
         Messages.Clear();
         foreach (var feed in Feeds)
-        {
             feed.MarkRead();
-            feed.ClearNewMarker();
-        }
     }
 
     public void RefreshCommandsIfNeeded()

@@ -170,7 +170,6 @@ public sealed class ChatFeed
     private DateTime lastRepeatTime;
     private ChatSearch query = ChatSearch.Empty;
     private string search = string.Empty;
-    private bool isActive;
     private long lastId;
     private int generation = -1;
     private int filterVersion = -1;
@@ -190,23 +189,11 @@ public sealed class ChatFeed
     public int Unread { get; private set; }
     public int UnreadMentions { get; private set; }
 
-    /// <summary>Premier message arrivé en ton absence : c'est là que s'affiche « Nouveaux messages ».</summary>
-    public long? FirstUnreadId { get; private set; }
-
     /// <summary>Regrouper les messages identiques qui se suivent. Changer ce réglage demande une reconstruction.</summary>
     public bool CollapseRepeats { get; set; }
 
-    /// <summary>Un onglet affiché n'accumule pas de non lus. En le quittant, son repère a servi : il disparaît.</summary>
-    public bool IsActive
-    {
-        get => isActive;
-        set
-        {
-            if (isActive && !value)
-                FirstUnreadId = null;
-            isActive = value;
-        }
-    }
+    /// <summary>Un onglet affiché n'accumule pas de non lus.</summary>
+    public bool IsActive { get; set; }
 
     public string Search => search;
 
@@ -229,11 +216,6 @@ public sealed class ChatFeed
         Unread = 0;
         UnreadMentions = 0;
     }
-
-    public void ClearNewMarker() => FirstUnreadId = null;
-
-    /// <summary>Tu lisais plus haut quand ce message est arrivé : c'est là que tu t'étais arrêté.</summary>
-    public void MarkNewAt(long lineId) => FirstUnreadId = lineId;
 
     /// <param name="filterVersion">Change quand le filtre de l'onglet ou la liste des messages masqués change.</param>
     /// <param name="isHidden">Renvoie vrai pour un message à masquer (joueur masqué, anti-spam).</param>
@@ -270,24 +252,14 @@ public sealed class ChatFeed
                 continue;
             }
 
-            var added = false;
-            if (Matches(line))
-            {
-                added = AddVisible(line);
+            // Une répétition ne relance pas le compteur : le message est déjà signalé.
+            if (Matches(line) && !AddVisible(line))
+                continue;
 
-                // Une répétition ne relance ni le compteur ni le repère : le message est déjà signalé.
-                if (!added)
-                    continue;
-            }
-
-            if (!isActive && !line.FromHistory)
+            if (!IsActive && !line.FromHistory)
             {
                 if (Settings.ShowUnread)
-                {
                     Unread++;
-                    if (added)
-                        FirstUnreadId ??= line.Id;
-                }
 
                 if (line.Mentioned || line.Kind == ChatKind.TellIncoming)
                     UnreadMentions++;

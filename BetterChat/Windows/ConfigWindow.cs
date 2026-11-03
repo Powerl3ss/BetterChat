@@ -725,7 +725,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     changed |= ToggleRow("Icônes de job", "À côté du nom des membres du groupe et des joueurs à proximité.", Cfg.ShowJobIcons, v => Cfg.ShowJobIcons = v);
                     using (ImRaii.Disabled(!Cfg.ShowJobIcons))
                         changed |= SliderRow("Taille des icônes de job", "Par rapport à la hauteur du texte.", Cfg.JobIconPercent, 50f, 110f, "%.0f %%", v => Cfg.JobIconPercent = MathF.Round(v));
-                    changed |= ToggleRow("Séparateurs", "Une ligne « Nouveaux messages » là où tu t'étais arrêté, une à chaque reconnexion et une quand la date change.", Cfg.ShowSeparators, v => Cfg.ShowSeparators = v);
+                    changed |= ToggleRow("Séparateurs", "Une ligne à chaque reconnexion, et une autre quand la date change.", Cfg.ShowSeparators, v => Cfg.ShowSeparators = v);
                 });
 
                 SectionTitle("Saisie");

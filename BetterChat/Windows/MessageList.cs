@@ -55,7 +55,6 @@ public sealed class MessageList
     private readonly List<LineSeparators> separators = new();
     private ChatFeed? stackFeed;
     private int stackRebuild = -1;
-    private long? stackMarker;
     private int layoutKey;
     private float lineHeight;
     private float textWidth;
@@ -63,8 +62,6 @@ public sealed class MessageList
     private float timeColumn;
 
     private bool stickToBottom = true;
-    private float? forcedScroll;
-    private bool markerSeen = true;
     private int unseenBelow;
     private int lastCountForUnseen;
     private bool scrollToBottom;
@@ -107,7 +104,7 @@ public sealed class MessageList
         textLeft = EdgeMargin * S;
         textWidth = MathF.Max(size.X - textLeft * 2f - scrollbar, 40f);
 
-        PrepareStack(feed, size.Y);
+        PrepareStack(feed);
 
         if (stack.Count == 0)
         {
@@ -121,7 +118,7 @@ public sealed class MessageList
         // Collé en bas, la position vient directement du calcul : ImGui applique le défilement et la nouvelle hauteur
         // de la liste avec une image de retard, ce qui faisait sautiller les messages quand elle change de taille.
         var paddingTop = ListPaddingTop * S;
-        var scrollY = forcedScroll ?? (stickToBottom || scrollToBottom ? MathF.Max(ContentHeight - size.Y, 0f) : ImGui.GetScrollY());
+        var scrollY = stickToBottom || scrollToBottom ? MathF.Max(ContentHeight - size.Y, 0f) : ImGui.GetScrollY();
         var windowPos = ImGui.GetWindowPos();
         var origin = new Vector2(windowPos.X, windowPos.Y - scrollY + paddingTop);
 
@@ -157,40 +154,29 @@ public sealed class MessageList
 
     private float SeparatorHeight => MathF.Round(lineHeight + 8f * S);
 
-    private void PrepareStack(ChatFeed feed, float viewHeight)
+    private void PrepareStack(ChatFeed feed)
     {
         // Présentation moderne : l'heure a sa colonne à gauche, et tous les textes commencent au même endroit.
         timeColumn = Cfg.Style == ChatStyle.Modern && Cfg.ShowTimestamps ? MathF.Ceiling(Measure("00:00") + 6f * S) : 0f;
 
         var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor,
                                    HashCode.Combine(Cfg.ShowJobIcons, Cfg.JobIconPercent), Cfg.ShowSeparators);
-        var feedChanged = !ReferenceEquals(stackFeed, feed);
-        var listChanged = feedChanged || stackRebuild != feed.RebuildCount;
-        var rebuild = listChanged || layoutKey != key || stackMarker != feed.FirstUnreadId;
+        var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
 
         if (rebuild)
         {
             // Changer d'onglet ramène en bas. Une nouvelle mise en page garde le bas s'il y était.
-            if (feedChanged || stickToBottom)
+            if (!ReferenceEquals(stackFeed, feed) || stickToBottom)
                 scrollToBottom = true;
 
             stackFeed = feed;
             stackRebuild = feed.RebuildCount;
-            stackMarker = feed.FirstUnreadId;
             layoutKey = key;
             stack.Clear();
             headers.Clear();
             separators.Clear();
-
-            // Un simple repère qui bouge ne fait pas oublier les messages arrivés entre-temps.
-            if (listChanged)
-            {
-                lastCountForUnseen = feed.Visible.Count;
-                unseenBelow = 0;
-            }
-
-            if (feedChanged)
-                markerSeen = feed.FirstUnreadId == null;
+            lastCountForUnseen = feed.Visible.Count;
+            unseenBelow = 0;
         }
 
         // Nouveaux messages depuis la dernière image : on ne met en page que ceux-là.
@@ -199,7 +185,7 @@ public sealed class MessageList
         for (var i = stack.Count; i < lines.Count; i++)
         {
             var previous = i > 0 ? lines[i - 1] : null;
-            var marks = Cfg.ShowSeparators ? LineSeparators.Between(previous, lines[i], feed.FirstUnreadId, today) : default;
+            var marks = Cfg.ShowSeparators ? LineSeparators.Between(previous, lines[i], today) : default;
 
             // Après un séparateur, le nom de l'auteur est toujours rappelé.
             var header = Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(lines[i]) && (marks.Any || ChatGrouping.StartsGroup(previous, lines[i]));
@@ -207,40 +193,14 @@ public sealed class MessageList
             separators.Add(marks);
             stack.Add(LineHeightOf(lines[i], i, header) + SeparatorsHeight(marks));
         }
-
-        if (feedChanged)
-            ScrollToNewMarker(feed, viewHeight);
     }
 
-    private float SeparatorsHeight(LineSeparators marks) =>
-        ((marks.NewMessages ? 1 : 0) + (marks.Day != null ? 1 : 0)) * SeparatorHeight;
-
-    /// <summary>En ouvrant un onglet, on reprend là où on s'était arrêté, si le repère ne tient pas déjà à l'écran.</summary>
-    private void ScrollToNewMarker(ChatFeed feed, float viewHeight)
-    {
-        if (!Cfg.ShowSeparators || feed.FirstUnreadId is not { } id)
-            return;
-
-        for (var i = feed.Visible.Count - 1; i >= 0; i--)
-        {
-            if (feed.Visible[i].Id != id)
-                continue;
-
-            if (stack.Total - stack.Top(i) > viewHeight)
-            {
-                forcedScroll = MathF.Max(stack.Top(i) + (ListPaddingTop - 4f) * S, 0f);
-                scrollToBottom = false;
-                stickToBottom = false;
-            }
-
-            return;
-        }
-    }
+    private float SeparatorsHeight(LineSeparators marks) => marks.Day != null ? SeparatorHeight : 0f;
 
     private float LineHeightOf(ChatLine line, int index, bool header)
     {
         if (line.Kind == ChatKind.SessionStart)
-            return SeparatorHeight;
+            return Cfg.ShowSeparators ? SeparatorHeight : 0f;
 
         var layout = LayoutOf(line);
         var height = layout.Text.LineCount * lineHeight;
@@ -344,14 +304,9 @@ public sealed class MessageList
 
         if (line.Kind == ChatKind.SessionStart)
         {
-            DrawSeparator(drawList, origin.X, top, line.BodyText, Cfg.SecondaryColor);
+            if (Cfg.ShowSeparators)
+                DrawSeparator(drawList, origin.X, top, line.BodyText, Cfg.SecondaryColor);
             return;
-        }
-
-        if (marks.NewMessages)
-        {
-            DrawSeparator(drawList, origin.X, top, "Nouveaux messages", Accent);
-            top += SeparatorHeight;
         }
 
         var rowMin = new Vector2(origin.X, top);
@@ -401,7 +356,7 @@ public sealed class MessageList
         }
     }
 
-    /// <summary>Une ligne horizontale coupée par un texte centré : changement de date, ou nouveaux messages.</summary>
+    /// <summary>Une ligne horizontale coupée par un texte centré : changement de date, ou reconnexion.</summary>
     private void DrawSeparator(ImDrawListPtr drawList, float originX, float top, string text, Vector4 color)
     {
         var left = originX + textLeft;
@@ -928,14 +883,6 @@ public sealed class MessageList
         var scrollY = ImGui.GetScrollY();
         var scrollMax = MathF.Max(ContentHeight - size.Y, 0f);
 
-        // Ouverture d'un onglet sur son repère : le défilement réel suivra à l'image d'après.
-        if (forcedScroll is { } forced)
-        {
-            ImGui.SetScrollY(forced);
-            forcedScroll = null;
-            scrollSettleFrames = ScrollSettleFrameCount;
-        }
-
         // Comparé au bas de l'image précédente : un nouveau message allonge la liste sans décoller du bas,
         // alors que la molette ou la barre de défilement, elles, font remonter.
         //
@@ -955,24 +902,12 @@ public sealed class MessageList
         if (count > lastCountForUnseen)
         {
             if (!stickToBottom)
-            {
                 unseenBelow += count - lastCountForUnseen;
-
-                // Tu lisais plus haut : le repère se pose sur le premier message que tu n'as pas vu.
-                if (markerSeen || feed.FirstUnreadId == null)
-                {
-                    feed.MarkNewAt(feed.Visible[lastCountForUnseen].Id);
-                    markerSeen = false;
-                }
-            }
         }
         lastCountForUnseen = count;
 
         if (stickToBottom)
-        {
             unseenBelow = 0;
-            markerSeen = true;
-        }
 
         if (scrollToBottom || stickToBottom)
         {
