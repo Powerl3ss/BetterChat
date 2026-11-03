@@ -47,6 +47,7 @@ public sealed partial class ChatWindow
     private float lineHeight;
     private float textWidth;
     private float textLeft;
+    private float timeColumn;
 
     private bool stickToBottom = true;
     private int unseenBelow;
@@ -128,6 +129,9 @@ public sealed partial class ChatWindow
 
     private void PrepareStack(ChatFeed feed)
     {
+        // Présentation moderne : l'heure a sa colonne à gauche, et tous les textes commencent au même endroit.
+        timeColumn = Cfg.Style == ChatStyle.Modern && Cfg.ShowTimestamps ? MathF.Ceiling(Measure("00:00") + 6f * S) : 0f;
+
         var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor);
         var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
 
@@ -176,7 +180,7 @@ public sealed partial class ChatWindow
             return cached;
 
         var layout = new LineLayout { Key = layoutKey, Spans = DisplaySpans(line) };
-        layout.Text = TextLayout.Wrap(layout.Spans, textWidth, Measure, 0f, Cfg.Style == ChatStyle.Compact ? 12f * S : 0f);
+        layout.Text = TextLayout.Wrap(layout.Spans, textWidth - timeColumn, Measure, 0f, Cfg.Style == ChatStyle.Compact ? 12f * S : 0f);
         line.LayoutCache = layout;
         return layout;
     }
@@ -189,7 +193,7 @@ public sealed partial class ChatWindow
             return line.Body;
 
         var spans = new List<ChatSpan>(line.Body.Count + line.Sender.Count + 3);
-        if (Cfg.ShowTimestamps)
+        if (Cfg.ShowTimestamps && Cfg.Style == ChatStyle.Compact)
             spans.Add(new ChatSpan(line.TimeUtc.ToLocalTime().ToString("HH:mm") + " ", DimRgba));
 
         if (Cfg.ShowChannelTags && Cfg.Style == ChatStyle.Compact)
@@ -259,16 +263,24 @@ public sealed partial class ChatWindow
         var channel = plugin.Colors.Of(line.Kind);
         var y = top;
         var left = origin.X + textLeft;
+        var textX = left + timeColumn;
+
+        // L'heure en face de la première ligne. Un message qui suit le précédent du même auteur n'en répète pas.
+        if (timeColumn > 0f && (header || !ChatGrouping.HasAuthorHeader(line)))
+        {
+            var timeY = header ? y + 8f * S : y;
+            DrawOutlinedText(drawList, new Vector2(left, timeY), Cfg.SecondaryColor, line.TimeUtc.ToLocalTime().ToString("HH:mm"));
+        }
 
         if (header)
         {
             y += 8f * S;
-            DrawHeader(line, new Vector2(left, y), channel, hoverable);
+            DrawHeader(line, new Vector2(textX, y), channel, hoverable);
             y += lineHeight + 1f * S;
         }
 
         var layout = LayoutOf(line);
-        DrawRuns(layout, new Vector2(left, y), channel, hoverable);
+        DrawRuns(layout, new Vector2(textX, y), channel, hoverable);
 
         if (hovered && hoveredLink == null && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
         {
@@ -302,8 +314,7 @@ public sealed partial class ChatWindow
             x += w;
         }
 
-        // Le canal et l'heure, plus discrets.
-        var dim = Cfg.SecondaryColor;
+        // Le canal, plus discret.
         x += 8f * S;
         if (Cfg.ShowChannelTags)
         {
@@ -313,15 +324,6 @@ public sealed partial class ChatWindow
             var pillMax = new Vector2(x + tagW + 10f * S, pos.Y + lineHeight - 1f * S);
             drawList.AddRectFilled(pillMin, pillMax, Col(channel with { W = 0.14f }), lineHeight / 2f);
             DrawOutlinedText(drawList, new Vector2(x + 5f * S, pos.Y), channel, tag);
-            x = pillMax.X + 8f * S;
-        }
-
-        // L'heure en colonne, au bord droit : elle ne se mêle plus au nom, et se parcourt d'un coup d'oeil.
-        if (Cfg.ShowTimestamps)
-        {
-            var time = line.TimeUtc.ToLocalTime().ToString("HH:mm");
-            var timeX = MathF.Max(x, pos.X + textWidth - Measure(time));
-            DrawOutlinedText(drawList, new Vector2(timeX, pos.Y), dim, time);
         }
     }
 
