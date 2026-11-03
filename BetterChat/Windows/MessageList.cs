@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Textures;
@@ -9,14 +10,15 @@ using Dalamud.Utility;
 using Lumina.Excel.Sheets;
 using BetterChat.Chat;
 using BetterChat.Core;
+using static BetterChat.Windows.ChatWindow;
 
 namespace BetterChat.Windows;
 
 /// <summary>
 /// La liste des messages. Elle peut en contenir des milliers : chaque message est mis en page une fois,
-/// et seuls ceux à l'écran sont dessinés.
+/// et seuls ceux à l'écran sont dessinés. Le chat en a une, et chaque onglet détaché a la sienne.
 /// </summary>
-public sealed partial class ChatWindow
+public sealed class MessageList
 {
     private const float ScrollStickMargin = 4f;
     private const int ScrollSettleFrameCount = 3;
@@ -33,16 +35,22 @@ public sealed partial class ChatWindow
         public int Key;
         public List<ChatSpan> Spans = new();
         public LaidOutText Text = LaidOutText.Empty;
+        public int IconSpan = -1;
     }
 
     // Largeur de chaque mot, gardée entre deux mises en page : un redimensionnement reste fluide.
     private readonly Dictionary<string, float> widths = new();
     private float widthsFontPx;
 
+    // Chaque vue garde sa mise en page, car les fenêtres n'ont pas la même largeur. Elle s'en va avec le message.
+    private readonly ConditionalWeakTable<ChatLine, LineLayout> layouts = new();
+
     private readonly LineStack stack = new();
     private readonly List<bool> headers = new();
+    private readonly List<LineSeparators> separators = new();
     private ChatFeed? stackFeed;
     private int stackRebuild = -1;
+    private long? stackMarker;
     private int layoutKey;
     private float lineHeight;
     private float textWidth;
@@ -50,6 +58,8 @@ public sealed partial class ChatWindow
     private float timeColumn;
 
     private bool stickToBottom = true;
+    private float? forcedScroll;
+    private bool markerSeen = true;
     private int unseenBelow;
     private int lastCountForUnseen;
     private bool scrollToBottom;
@@ -65,21 +75,34 @@ public sealed partial class ChatWindow
     private ChatLine? contextLine;
     private ChatLink? contextLink;
     private ChatLink? pendingUrl;
+    private string colorPlayer = string.Empty;
+    private bool openPlayerColor;
 
-    private void DrawMessages(Vector2 size)
+    private readonly Plugin plugin;
+    private readonly ChatWindow chat;
+
+    public MessageList(Plugin plugin, ChatWindow chat)
+    {
+        this.plugin = plugin;
+        this.chat = chat;
+    }
+
+    private Configuration Cfg => plugin.Configuration;
+    private Vector4 Accent => Cfg.AccentColor with { W = 1f };
+
+    public void Draw(ChatFeed feed, Vector2 size)
     {
         using var child = ImRaii.Child("##messages", size, false, ImGuiWindowFlags.NoMove);
         if (!child.Success)
             return;
 
-        var feed = plugin.ActiveFeed;
         lineHeight = ImGui.GetTextLineHeight();
 
         var scrollbar = ImGui.GetStyle().ScrollbarSize;
         textLeft = EdgeMargin * S;
         textWidth = MathF.Max(size.X - textLeft * 2f - scrollbar, 40f);
 
-        PrepareStack(feed);
+        PrepareStack(feed, size.Y);
 
         if (stack.Count == 0)
         {
@@ -93,7 +116,7 @@ public sealed partial class ChatWindow
         // Collé en bas, la position vient directement du calcul : ImGui applique le défilement et la nouvelle hauteur
         // de la liste avec une image de retard, ce qui faisait sautiller les messages quand elle change de taille.
         var paddingTop = ListPaddingTop * S;
-        var scrollY = stickToBottom || scrollToBottom ? MathF.Max(ContentHeight - size.Y, 0f) : ImGui.GetScrollY();
+        var scrollY = forcedScroll ?? (stickToBottom || scrollToBottom ? MathF.Max(ContentHeight - size.Y, 0f) : ImGui.GetScrollY());
         var windowPos = ImGui.GetWindowPos();
         var origin = new Vector2(windowPos.X, windowPos.Y - scrollY + paddingTop);
 
@@ -106,7 +129,7 @@ public sealed partial class ChatWindow
         var visibleTop = scrollY - paddingTop;
         var visibleBottom = visibleTop + size.Y;
         for (var i = stack.FirstVisible(visibleTop); i < stack.Count && stack.Top(i) < visibleBottom; i++)
-            DrawLine(feed.Visible[i], i, origin, size.X, hoverable);
+            DrawLine(feed, feed.Visible[i], i, origin, size.X, hoverable);
 
         // Le curseur main quand on survole un lien.
         if (hoveredLink != null)
@@ -127,36 +150,84 @@ public sealed partial class ChatWindow
 
     // ------------------------------------------------------------ Mise en page
 
-    private void PrepareStack(ChatFeed feed)
+    private float SeparatorHeight => MathF.Round(lineHeight + 8f * S);
+
+    private void PrepareStack(ChatFeed feed, float viewHeight)
     {
         // Présentation moderne : l'heure a sa colonne à gauche, et tous les textes commencent au même endroit.
         timeColumn = Cfg.Style == ChatStyle.Modern && Cfg.ShowTimestamps ? MathF.Ceiling(Measure("00:00") + 6f * S) : 0f;
 
-        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor);
-        var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
+        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor, Cfg.ShowJobIcons, Cfg.ShowSeparators);
+        var feedChanged = !ReferenceEquals(stackFeed, feed);
+        var listChanged = feedChanged || stackRebuild != feed.RebuildCount;
+        var rebuild = listChanged || layoutKey != key || stackMarker != feed.FirstUnreadId;
 
         if (rebuild)
         {
             // Changer d'onglet ramène en bas. Une nouvelle mise en page garde le bas s'il y était.
-            if (!ReferenceEquals(stackFeed, feed) || stickToBottom)
+            if (feedChanged || stickToBottom)
                 scrollToBottom = true;
 
             stackFeed = feed;
             stackRebuild = feed.RebuildCount;
+            stackMarker = feed.FirstUnreadId;
             layoutKey = key;
             stack.Clear();
             headers.Clear();
-            lastCountForUnseen = feed.Visible.Count;
-            unseenBelow = 0;
+            separators.Clear();
+
+            // Un simple repère qui bouge ne fait pas oublier les messages arrivés entre-temps.
+            if (listChanged)
+            {
+                lastCountForUnseen = feed.Visible.Count;
+                unseenBelow = 0;
+            }
+
+            if (feedChanged)
+                markerSeen = feed.FirstUnreadId == null;
         }
 
         // Nouveaux messages depuis la dernière image : on ne met en page que ceux-là.
         var lines = feed.Visible;
+        var today = DateTime.Today;
         for (var i = stack.Count; i < lines.Count; i++)
         {
-            var header = Cfg.Style == ChatStyle.Modern && ChatGrouping.StartsGroup(i > 0 ? lines[i - 1] : null, lines[i]);
+            var previous = i > 0 ? lines[i - 1] : null;
+            var marks = Cfg.ShowSeparators ? LineSeparators.Between(previous, lines[i], feed.FirstUnreadId, today) : default;
+
+            // Après un séparateur, le nom de l'auteur est toujours rappelé.
+            var header = Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(lines[i]) && (marks.Any || ChatGrouping.StartsGroup(previous, lines[i]));
             headers.Add(header);
-            stack.Add(LineHeightOf(lines[i], i, header));
+            separators.Add(marks);
+            stack.Add(LineHeightOf(lines[i], i, header) + SeparatorsHeight(marks));
+        }
+
+        if (feedChanged)
+            ScrollToNewMarker(feed, viewHeight);
+    }
+
+    private float SeparatorsHeight(LineSeparators marks) =>
+        ((marks.NewMessages ? 1 : 0) + (marks.Day != null ? 1 : 0)) * SeparatorHeight;
+
+    /// <summary>En ouvrant un onglet, on reprend là où on s'était arrêté, si le repère ne tient pas déjà à l'écran.</summary>
+    private void ScrollToNewMarker(ChatFeed feed, float viewHeight)
+    {
+        if (!Cfg.ShowSeparators || feed.FirstUnreadId is not { } id)
+            return;
+
+        for (var i = feed.Visible.Count - 1; i >= 0; i--)
+        {
+            if (feed.Visible[i].Id != id)
+                continue;
+
+            if (stack.Total - stack.Top(i) > viewHeight)
+            {
+                forcedScroll = MathF.Max(stack.Top(i) + (ListPaddingTop - 4f) * S, 0f);
+                scrollToBottom = false;
+                stickToBottom = false;
+            }
+
+            return;
         }
     }
 
@@ -176,17 +247,18 @@ public sealed partial class ChatWindow
 
     private LineLayout LayoutOf(ChatLine line)
     {
-        if (line.LayoutCache is LineLayout cached && cached.Key == layoutKey)
+        if (layouts.TryGetValue(line, out var cached) && cached.Key == layoutKey)
             return cached;
 
-        var layout = new LineLayout { Key = layoutKey, Spans = DisplaySpans(line) };
+        var layout = new LineLayout { Key = layoutKey };
+        layout.Spans = DisplaySpans(line, layout);
         layout.Text = TextLayout.Wrap(layout.Spans, textWidth - timeColumn, Measure, 0f, Cfg.Style == ChatStyle.Compact ? 12f * S : 0f);
-        line.LayoutCache = layout;
+        layouts.AddOrUpdate(line, layout);
         return layout;
     }
 
     /// <summary>En mode moderne, le texte seul (le nom est dans l'en-tête). En mode compact : heure, canal, nom, texte.</summary>
-    private List<ChatSpan> DisplaySpans(ChatLine line)
+    private List<ChatSpan> DisplaySpans(ChatLine line, LineLayout layout)
     {
         var hasHeader = Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(line);
         if (hasHeader)
@@ -201,6 +273,14 @@ public sealed partial class ChatWindow
 
         if (line.Sender.Count > 0 && line.SenderText.Length > 0)
         {
+            // L'icône de job n'est pas du texte : des espaces lui réservent sa place juste avant le nom.
+            if (HasJobIcon(line))
+            {
+                layout.IconSpan = spans.Count;
+                var spaces = (int)MathF.Ceiling((JobIconSize + 3f * S) / MathF.Max(Measure(" "), 1f));
+                spans.Add(new ChatSpan(new string(' ', spaces)));
+            }
+
             spans.AddRange(line.Sender);
             spans.Add(new ChatSpan(ChatGrouping.Separator(line.Kind)));
         }
@@ -218,15 +298,16 @@ public sealed partial class ChatWindow
         }
     }
 
-    private float Measure(string text)
+    internal float Measure(string text)
     {
         if (text.Length == 0)
             return 0f;
 
-        if (MathF.Abs(widthsFontPx - lineHeight) > 0.01f || widths.Count > WidthCacheLimit)
+        var fontPx = ImGui.GetTextLineHeight();
+        if (MathF.Abs(widthsFontPx - fontPx) > 0.01f || widths.Count > WidthCacheLimit)
         {
             widths.Clear();
-            widthsFontPx = lineHeight;
+            widthsFontPx = fontPx;
         }
 
         if (widths.TryGetValue(text, out var width))
@@ -239,13 +320,27 @@ public sealed partial class ChatWindow
 
     // ------------------------------------------------------------ Dessin d'un message
 
-    private void DrawLine(ChatLine line, int index, Vector2 origin, float width, bool hoverable)
+    private void DrawLine(ChatFeed feed, ChatLine line, int index, Vector2 origin, float width, bool hoverable)
     {
         var top = origin.Y + stack.Top(index);
         var bottom = origin.Y + stack.Bottom(index);
+        var drawList = ImGui.GetWindowDrawList();
+
+        var marks = separators[index];
+        if (marks.Day is { } day)
+        {
+            DrawSeparator(drawList, origin.X, top, ChatDates.Label(day, DateTime.Today), Cfg.SecondaryColor);
+            top += SeparatorHeight;
+        }
+
+        if (marks.NewMessages)
+        {
+            DrawSeparator(drawList, origin.X, top, "Nouveaux messages", Accent);
+            top += SeparatorHeight;
+        }
+
         var rowMin = new Vector2(origin.X, top);
         var rowMax = new Vector2(origin.X + width, bottom);
-        var drawList = ImGui.GetWindowDrawList();
 
         var hovered = hoverable && ImGui.IsMouseHoveringRect(rowMin, rowMax, false);
         if (hovered)
@@ -280,7 +375,8 @@ public sealed partial class ChatWindow
         }
 
         var layout = LayoutOf(line);
-        DrawRuns(layout, new Vector2(textX, y), channel, hoverable);
+        DrawRuns(line, layout, new Vector2(textX, y), channel, hoverable);
+        DrawRepeatCount(drawList, feed.RepeatCount(line), layout, new Vector2(textX, y));
 
         if (hovered && hoveredLink == null && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
         {
@@ -288,6 +384,53 @@ public sealed partial class ChatWindow
             contextLink = null;
             ImGui.OpenPopup("##lineMenu");
         }
+    }
+
+    /// <summary>Une ligne horizontale coupée par un texte centré : changement de date, ou nouveaux messages.</summary>
+    private void DrawSeparator(ImDrawListPtr drawList, float originX, float top, string text, Vector4 color)
+    {
+        var left = originX + textLeft;
+        var right = left + textWidth;
+        var width = Measure(text);
+        var textX = MathF.Round(left + (textWidth - width) / 2f);
+        var textY = MathF.Round(top + (SeparatorHeight - lineHeight) / 2f);
+        var lineY = MathF.Round(top + SeparatorHeight / 2f);
+        var gap = 8f * S;
+        var thickness = MathF.Max(1f, MathF.Round(S));
+        var lineColor = Col(color with { W = 0.45f });
+
+        // Dans une fenêtre très étroite, le texte seul prend toute la place.
+        if (textX - gap > left)
+        {
+            drawList.AddRectFilled(new Vector2(left, lineY), new Vector2(textX - gap, lineY + thickness), lineColor);
+            drawList.AddRectFilled(new Vector2(textX + width + gap, lineY), new Vector2(right, lineY + thickness), lineColor);
+        }
+
+        DrawOutlinedText(drawList, new Vector2(textX, textY), color, text);
+    }
+
+    /// <summary>« x3 » juste après le texte d'un message répété.</summary>
+    private void DrawRepeatCount(ImDrawListPtr drawList, int count, LineLayout layout, Vector2 pos)
+    {
+        if (count <= 1 || layout.Text.Runs.Count == 0)
+            return;
+
+        var last = layout.Text.Runs[^1];
+        var text = $"x{count}";
+        var x = MathF.Min(last.X + last.Width + 6f * S, textWidth - timeColumn - Measure(text));
+        DrawOutlinedText(drawList, pos + new Vector2(x, last.Line * lineHeight), Cfg.SecondaryColor, text);
+    }
+
+    private bool HasJobIcon(ChatLine line) => Cfg.ShowJobIcons && line.AuthorJob != 0;
+
+    private float JobIconSize => MathF.Round(lineHeight);
+
+    private void DrawJobIcon(ImDrawListPtr drawList, uint job, Vector2 pos)
+    {
+        // Les icônes de job du jeu se suivent à partir de 62000, dans l'ordre de la feuille ClassJob.
+        var icon = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(62000 + job));
+        if (icon.TryGetWrap(out var wrap, out _) && wrap != null)
+            drawList.AddImage(wrap.Handle, pos, pos + new Vector2(JobIconSize, JobIconSize));
     }
 
     private void DrawHeader(ChatLine line, Vector2 pos, Vector4 channel, bool hoverable)
@@ -302,14 +445,20 @@ public sealed partial class ChatWindow
             x += Measure("À ");
         }
 
+        if (HasJobIcon(line))
+        {
+            DrawJobIcon(drawList, line.AuthorJob, new Vector2(x, pos.Y));
+            x += JobIconSize + 3f * S;
+        }
+
         foreach (var span in line.Sender)
         {
             if (span.Text.Length == 0)
                 continue;
 
-            var color = span.Color != 0 ? ChannelColors.FromRgba(span.Color) : channel;
-            var w = Measure(span.Text);
             var link = span.Link ?? line.Author;
+            var color = plugin.PlayerColor(link) ?? (span.Color != 0 ? ChannelColors.FromRgba(span.Color) : channel);
+            var w = Measure(span.Text);
             DrawRun(drawList, new Vector2(x, pos.Y), span.Text, w, color, link, hoverable);
             x += w;
         }
@@ -327,13 +476,19 @@ public sealed partial class ChatWindow
         }
     }
 
-    private void DrawRuns(LineLayout layout, Vector2 pos, Vector4 channel, bool hoverable)
+    private void DrawRuns(ChatLine line, LineLayout layout, Vector2 pos, Vector4 channel, bool hoverable)
     {
         var drawList = ImGui.GetWindowDrawList();
         foreach (var run in layout.Text.Runs)
         {
+            if (run.SpanIndex == layout.IconSpan)
+            {
+                DrawJobIcon(drawList, line.AuthorJob, pos + new Vector2(run.X, run.Line * lineHeight));
+                continue;
+            }
+
             var span = layout.Spans[run.SpanIndex];
-            var color = span.Color != 0 ? ChannelColors.FromRgba(span.Color) : channel;
+            var color = plugin.PlayerColor(span.Link) ?? (span.Color != 0 ? ChannelColors.FromRgba(span.Color) : channel);
             if (span.Italic)
                 color = color with { W = color.W * 0.85f };
 
@@ -361,7 +516,7 @@ public sealed partial class ChatWindow
     }
 
     /// <summary>Texte avec un contour : 8 copies sombres décalées, dessinées dessous. Il reste lisible sans fond.</summary>
-    private void DrawOutlinedText(ImDrawListPtr drawList, Vector2 pos, Vector4 color, string text)
+    internal void DrawOutlinedText(ImDrawListPtr drawList, Vector2 pos, Vector4 color, string text)
     {
         if (Cfg.TextOutline && Cfg.OutlineStrength > 0f)
         {
@@ -401,6 +556,12 @@ public sealed partial class ChatWindow
             return;
         }
 
+        if (left && link.Kind == LinkKind.PartyFinder)
+        {
+            GameChat.OpenPartyFinder(link.Id);
+            return;
+        }
+
         if (left && link.Kind == LinkKind.Url)
         {
             pendingUrl = link;
@@ -425,7 +586,16 @@ public sealed partial class ChatWindow
                 Tip.Show($"{link.Text}\nClic : ouvrir le lien (une confirmation est demandée)");
                 break;
             case LinkKind.Player:
-                Tip.Show($"{link.Text}{(link.World.Length > 0 ? " (" + link.World + ")" : string.Empty)}\nClic : message privé, copier, masquer");
+                Tip.Show($"{link.Text}{(link.World.Length > 0 ? " (" + link.World + ")" : string.Empty)}\nClic : message privé, copier, couleur, masquer");
+                break;
+            case LinkKind.Quest:
+                DrawQuestTooltip(link.Id);
+                break;
+            case LinkKind.Status:
+                DrawStatusTooltip(link.Id);
+                break;
+            case LinkKind.PartyFinder:
+                Tip.Show("Annonce de recherche de groupe\nClic : ouvrir l'annonce");
                 break;
         }
     }
@@ -452,6 +622,57 @@ public sealed partial class ChatWindow
         Tip.Hint("Clic : copier, lier dans le chat");
         ImGui.EndGroup();
     }
+
+    private static void DrawQuestTooltip(uint questId)
+    {
+        var quest = Plugin.DataManager.GetExcelSheet<Quest>().GetRowOrDefault(questId);
+        if (quest == null)
+            return;
+
+        using var tooltip = Tip.Begin();
+        Tip.Title(quest.Value.Name.ExtractText());
+
+        var genre = quest.Value.JournalGenre.ValueNullable?.Name.ExtractText();
+        if (!string.IsNullOrEmpty(genre))
+            Tip.Note(genre);
+
+        var level = quest.Value.ClassJobLevel[0];
+        if (level > 0)
+            Tip.Note($"Niveau {level}");
+
+        Tip.Hint("Clic : copier le nom");
+    }
+
+    private static void DrawStatusTooltip(uint statusId)
+    {
+        var status = Plugin.DataManager.GetExcelSheet<Status>().GetRowOrDefault(statusId);
+        if (status == null)
+            return;
+
+        using var tooltip = Tip.Begin();
+
+        var icon = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(status.Value.Icon));
+        if (icon.TryGetWrap(out var wrap, out _) && wrap != null)
+        {
+            // Les icônes d'effet sont plus hautes que larges.
+            ImGui.Image(wrap.Handle, new Vector2(24f, 32f) * S);
+            ImGui.SameLine();
+        }
+
+        ImGui.BeginGroup();
+        Tip.Title(status.Value.Name.ExtractText());
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + 280f * S);
+        ImGui.TextUnformatted(status.Value.Description.ExtractText());
+        ImGui.PopTextWrapPos();
+        Tip.Hint("Clic : copier le nom");
+        ImGui.EndGroup();
+    }
+
+    private static string QuestName(uint questId) =>
+        Plugin.DataManager.GetExcelSheet<Quest>().GetRowOrDefault(questId)?.Name.ExtractText() ?? string.Empty;
+
+    private static string StatusName(uint statusId) =>
+        Plugin.DataManager.GetExcelSheet<Status>().GetRowOrDefault(statusId)?.Name.ExtractText() ?? string.Empty;
 
     private static string ItemName(uint itemId) =>
         Plugin.DataManager.GetExcelSheet<Item>().GetRowOrDefault(itemId)?.Name.ExtractText() ?? string.Empty;
@@ -499,7 +720,7 @@ public sealed partial class ChatWindow
                     if (Tip.MenuItem("Lier dans le chat", FontAwesomeIcon.Link))
                     {
                         GameChat.LinkItem(contextLink.Id);
-                        AppendToInput("<item>");
+                        chat.AppendToInput("<item>");
                     }
                     if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(name);
@@ -518,12 +739,67 @@ public sealed partial class ChatWindow
                     if (Tip.MenuItem("Copier le lien", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(contextLink.Text);
                     break;
+
+                case LinkKind.Quest:
+                    DrawCopyNameMenu(QuestName(contextLink.Id));
+                    break;
+
+                case LinkKind.Status:
+                    DrawCopyNameMenu(StatusName(contextLink.Id));
+                    break;
+
+                case LinkKind.PartyFinder:
+                    if (Tip.MenuItem("Ouvrir l'annonce", FontAwesomeIcon.Users))
+                        GameChat.OpenPartyFinder(contextLink.Id);
+                    break;
             }
 
             Tip.EndMenu();
         }
 
+        // Le choix de la couleur s'ouvre une fois le menu refermé.
+        if (openPlayerColor)
+        {
+            openPlayerColor = false;
+            ImGui.OpenPopup("##playerColor");
+        }
+
+        DrawPlayerColorPopup();
         DrawUrlConfirm();
+    }
+
+    private static void DrawCopyNameMenu(string name)
+    {
+        Tip.MenuTitle(name);
+        Tip.MenuSeparator();
+        if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))
+            ImGui.SetClipboardText(name);
+    }
+
+    private void DrawPlayerColorPopup()
+    {
+        using var popupStyle = Tip.PushPopupStyle();
+        if (!ImGui.BeginPopup("##playerColor"))
+            return;
+
+        Tip.Title(colorPlayer);
+
+        var current = Cfg.PlayerColors.TryGetValue(colorPlayer, out var chosen) ? chosen : Accent;
+        var color = new Vector3(current.X, current.Y, current.Z);
+        const ImGuiColorEditFlags Flags = ImGuiColorEditFlags.NoSidePreview | ImGuiColorEditFlags.NoSmallPreview | ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoLabel;
+        ImGui.SetNextItemWidth(180f * S);
+        if (ImGui.ColorPicker3("##pick", ref color, Flags))
+            plugin.SetPlayerColor(colorPlayer, new Vector4(color, 1f), save: false);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            Cfg.Save();
+
+        if (Cfg.PlayerColors.ContainsKey(colorPlayer) && ImGui.Button("Retirer la couleur"))
+        {
+            plugin.RemovePlayerColor(colorPlayer);
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
     }
 
     private void DrawPlayerActions(ChatLink player, bool separatorAfter = true)
@@ -531,11 +807,17 @@ public sealed partial class ChatWindow
         if (player.Text != plugin.LocalName && Tip.MenuItem("Envoyer un message privé", FontAwesomeIcon.Envelope))
         {
             plugin.Game.SwitchToTell(player);
-            FocusInput();
+            chat.FocusInput();
         }
 
         if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))
             ImGui.SetClipboardText(player.TellTarget);
+
+        if (Tip.MenuItem("Choisir sa couleur", FontAwesomeIcon.Palette))
+        {
+            colorPlayer = player.Text;
+            openPlayerColor = true;
+        }
 
         if (player.Text != plugin.LocalName && Tip.MenuItem("Masquer ses messages", FontAwesomeIcon.CommentSlash, danger: true))
             plugin.MutePlayer(player.Text);
@@ -583,6 +865,14 @@ public sealed partial class ChatWindow
         var scrollY = ImGui.GetScrollY();
         var scrollMax = MathF.Max(ContentHeight - size.Y, 0f);
 
+        // Ouverture d'un onglet sur son repère : le défilement réel suivra à l'image d'après.
+        if (forcedScroll is { } forced)
+        {
+            ImGui.SetScrollY(forced);
+            forcedScroll = null;
+            scrollSettleFrames = ScrollSettleFrameCount;
+        }
+
         // Comparé au bas de l'image précédente : un nouveau message allonge la liste sans décoller du bas,
         // alors que la molette ou la barre de défilement, elles, font remonter.
         //
@@ -602,12 +892,24 @@ public sealed partial class ChatWindow
         if (count > lastCountForUnseen)
         {
             if (!stickToBottom)
+            {
                 unseenBelow += count - lastCountForUnseen;
+
+                // Tu lisais plus haut : le repère se pose sur le premier message que tu n'as pas vu.
+                if (markerSeen || feed.FirstUnreadId == null)
+                {
+                    feed.MarkNewAt(feed.Visible[lastCountForUnseen].Id);
+                    markerSeen = false;
+                }
+            }
         }
         lastCountForUnseen = count;
 
         if (stickToBottom)
+        {
             unseenBelow = 0;
+            markerSeen = true;
+        }
 
         if (scrollToBottom || stickToBottom)
         {

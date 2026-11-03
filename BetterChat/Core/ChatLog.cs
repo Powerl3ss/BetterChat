@@ -66,7 +66,14 @@ public sealed class ChatLog
 [Serializable]
 public sealed class ChatTabSettings
 {
+    /// <summary>Identifiant stable : la fenêtre détachée retrouve ainsi sa place même si l'onglet est renommé.</summary>
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
     public string Name { get; set; } = "Onglet";
+
+    /// <summary>L'onglet est sorti dans sa propre fenêtre.</summary>
+    public bool Detached { get; set; }
+
     public List<ChatKind> Kinds { get; set; } = new();
 
     /// <summary>Pour le combat : n'afficher que soi, ou soi et le groupe.</summary>
@@ -151,9 +158,15 @@ public static class ChatTabPresets
 /// <summary>Les messages visibles d'un onglet : son filtre, la recherche en cours, ses messages non lus.</summary>
 public sealed class ChatFeed
 {
+    // Au-delà de ce délai, un même message répété repart sur une nouvelle ligne.
+    private const double RepeatWindowMinutes = 5;
+
     private readonly List<ChatLine> visible = new();
-    private readonly List<ChatLine> rebuilding = new();
+    private readonly Dictionary<long, int> repeats = new();
+    private DateTime lastRepeatTime;
+    private ChatSearch query = ChatSearch.Empty;
     private string search = string.Empty;
+    private bool isActive;
     private long lastId;
     private int generation = -1;
     private int filterVersion = -1;
@@ -173,18 +186,37 @@ public sealed class ChatFeed
     public int Unread { get; private set; }
     public int UnreadMentions { get; private set; }
 
-    /// <summary>Un onglet affiché n'accumule pas de non lus.</summary>
-    public bool IsActive { get; set; }
+    /// <summary>Premier message arrivé en ton absence : c'est là que s'affiche « Nouveaux messages ».</summary>
+    public long? FirstUnreadId { get; private set; }
+
+    /// <summary>Regrouper les messages identiques qui se suivent. Changer ce réglage demande une reconstruction.</summary>
+    public bool CollapseRepeats { get; set; }
+
+    /// <summary>Un onglet affiché n'accumule pas de non lus. En le quittant, son repère a servi : il disparaît.</summary>
+    public bool IsActive
+    {
+        get => isActive;
+        set
+        {
+            if (isActive && !value)
+                FirstUnreadId = null;
+            isActive = value;
+        }
+    }
 
     public string Search => search;
 
-    public void SetSearch(string text)
+    /// <summary>Nombre d'exemplaires de ce message : 1 s'il n'a pas été répété.</summary>
+    public int RepeatCount(ChatLine line) => repeats.TryGetValue(line.Id, out var count) ? count : 1;
+
+    public void SetSearch(string text, DateTime? today = null)
     {
-        text = text.Trim().ToLowerInvariant();
+        text = text.Trim();
         if (text == search)
             return;
 
         search = text;
+        query = ChatSearch.Parse(text, today ?? DateTime.Today);
         generation = -1; // reconstruction à la prochaine mise à jour
     }
 
@@ -194,15 +226,20 @@ public sealed class ChatFeed
         UnreadMentions = 0;
     }
 
-    /// <param name="filterVersion">Change quand le filtre de l'onglet ou la liste des joueurs masqués change.</param>
-    /// <param name="isMuted">Renvoie vrai pour un message dont l'auteur est masqué.</param>
-    public void Update(ChatLog log, int filterVersion, Func<ChatLine, bool> isMuted)
+    public void ClearNewMarker() => FirstUnreadId = null;
+
+    /// <summary>Tu lisais plus haut quand ce message est arrivé : c'est là que tu t'étais arrêté.</summary>
+    public void MarkNewAt(long lineId) => FirstUnreadId = lineId;
+
+    /// <param name="filterVersion">Change quand le filtre de l'onglet ou la liste des messages masqués change.</param>
+    /// <param name="isHidden">Renvoie vrai pour un message à masquer (joueur masqué, anti-spam).</param>
+    public void Update(ChatLog log, int filterVersion, Func<ChatLine, bool> isHidden)
     {
         if (generation != log.Generation || this.filterVersion != filterVersion)
         {
             generation = log.Generation;
             this.filterVersion = filterVersion;
-            Rebuild(log, isMuted);
+            Rebuild(log, isHidden);
             return;
         }
 
@@ -218,16 +255,28 @@ public sealed class ChatFeed
         for (var i = start; i < lines.Count; i++)
         {
             var line = lines[i];
-            if (!Settings.Accepts(line) || isMuted(line))
+            if (!Settings.Accepts(line) || isHidden(line))
                 continue;
 
+            var added = false;
             if (Matches(line))
-                visible.Add(line);
+            {
+                added = AddVisible(line);
 
-            if (!IsActive && !line.FromHistory)
+                // Une répétition ne relance ni le compteur ni le repère : le message est déjà signalé.
+                if (!added)
+                    continue;
+            }
+
+            if (!isActive && !line.FromHistory)
             {
                 if (Settings.ShowUnread)
+                {
                     Unread++;
+                    if (added)
+                        FirstUnreadId ??= line.Id;
+                }
+
                 if (line.Mentioned || line.Kind == ChatKind.TellIncoming)
                     UnreadMentions++;
             }
@@ -236,24 +285,45 @@ public sealed class ChatFeed
         lastId = log.LastId;
     }
 
-    private void Rebuild(ChatLog log, Func<ChatLine, bool> isMuted)
+    private void Rebuild(ChatLog log, Func<ChatLine, bool> isHidden)
     {
-        rebuilding.Clear();
+        visible.Clear();
+        repeats.Clear();
+
         foreach (var line in log.Lines)
         {
-            if (Settings.Accepts(line) && !isMuted(line) && Matches(line))
-                rebuilding.Add(line);
+            if (Settings.Accepts(line) && !isHidden(line) && Matches(line))
+                AddVisible(line);
         }
-
-        visible.Clear();
-        visible.AddRange(rebuilding);
-        rebuilding.Clear();
 
         lastId = log.LastId;
         RebuildCount++;
     }
 
-    private bool Matches(ChatLine line) => search.Length == 0 || line.SearchText.Contains(search, StringComparison.Ordinal);
+    /// <summary>Ajoute le message, ou compte une répétition du précédent. Renvoie vrai s'il a sa propre ligne.</summary>
+    private bool AddVisible(ChatLine line)
+    {
+        if (CollapseRepeats && visible.Count > 0 && IsRepeatOf(visible[^1], line))
+        {
+            repeats[visible[^1].Id] = RepeatCount(visible[^1]) + 1;
+            lastRepeatTime = line.TimeUtc;
+            return false;
+        }
+
+        visible.Add(line);
+        lastRepeatTime = line.TimeUtc;
+        return true;
+    }
+
+    private bool IsRepeatOf(ChatLine previous, ChatLine line) =>
+        previous.Kind == line.Kind &&
+        !ChatKinds.IsBattle(line.Kind) &&
+        (line.TimeUtc - lastRepeatTime).TotalMinutes <= RepeatWindowMinutes &&
+        line.BodyText.Length > 0 &&
+        string.Equals(previous.BodyText, line.BodyText, StringComparison.Ordinal) &&
+        string.Equals(previous.AuthorKey, line.AuthorKey, StringComparison.Ordinal);
+
+    private bool Matches(ChatLine line) => query.IsEmpty || query.Matches(line);
 }
 
 /// <summary>Position verticale de chaque message d'une liste, pour ne dessiner que ceux à l'écran.</summary>

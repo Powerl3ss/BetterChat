@@ -25,6 +25,23 @@ var tests = new (string Name, Action Run)[]
     ("Vue : recherche sur le nom et le texte", Tests.FeedSearch),
     ("Vue : un joueur masqué disparaît", Tests.FeedMutes),
     ("Vue : le nettoyage reconstruit la liste", Tests.FeedRebuildsAfterTrim),
+    ("Répétitions : messages identiques regroupés", Tests.RepeatsCollapse),
+    ("Répétitions : pas d'autre auteur, de long délai ni de combat", Tests.RepeatsBreak),
+    ("Répétitions : ne relancent pas les non-lus", Tests.RepeatsDoNotCountAsUnread),
+    ("Répétitions : recomptées après une reconstruction", Tests.RepeatsSurviveRebuild),
+    ("Anti-spam : mots, expressions, sans accents ni majuscules", Tests.SpamMatchesRules),
+    ("Anti-spam : seulement le texte des joueurs", Tests.SpamIgnoresSystemAndNames),
+    ("Recherche : de, canal et date", Tests.SearchFilters),
+    ("Recherche : guillemets et mots combinés", Tests.SearchQuotesAndWords),
+    ("Recherche : dates relatives et formats", Tests.SearchDates),
+    ("Recherche : préfixe inconnu ou date illisible restent du texte", Tests.SearchUnknownPrefixIsText),
+    ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
+    ("Séparateurs : repère au premier message arrivé en ton absence", Tests.NewMarkerIsFirstUnread),
+    ("Séparateurs : le repère disparaît en quittant l'onglet", Tests.NewMarkerClearsOnLeave),
+    ("Séparateurs : changement de date", Tests.DateSeparators),
+    ("Séparateurs : texte de la date", Tests.DateLabels),
+    ("Export : format lisible, sans symboles du jeu", Tests.ExportFormat),
+    ("Aperçu : raccourcis remplacés, inconnus conservés", Tests.MacroExpansion),
     ("Mémoire : le combat part avant les discussions", Tests.TrimRemovesBattleFirst),
     ("Mémoire : la limite est respectée sans combat", Tests.TrimKeepsNewest),
     ("Groupes : même auteur, pas de nouvel en-tête", Tests.GroupingSameAuthor),
@@ -373,6 +390,257 @@ internal static class Tests
         Same(log.Lines.Count, feed.Visible.Count, "même nombre");
         Same(log.Lines[0].Id, feed.Visible[0].Id, "même début");
         Same("m399", feed.Visible[^1].BodyText, "le dernier est là");
+    }
+
+    private static ChatFeed CollapsingFeed(params ChatKind[] kinds)
+    {
+        var feed = Feed(kinds);
+        feed.CollapseRepeats = true;
+        return feed;
+    }
+
+    public static void RepeatsCollapse()
+    {
+        var log = new ChatLog();
+        var feed = CollapsingFeed(ChatKind.Shout);
+        feed.Update(log, 0, NoMute);
+
+        log.Add(Line(ChatKind.Shout, "WTS gils", "Jean"));
+        log.Add(Line(ChatKind.Shout, "WTS gils", "Jean", time: T0.AddMinutes(1)));
+        log.Add(Line(ChatKind.Shout, "WTS gils", "Jean", time: T0.AddMinutes(2)));
+        feed.Update(log, 0, NoMute);
+
+        Same(1, feed.Visible.Count, "une seule ligne");
+        Same(3, feed.RepeatCount(feed.Visible[0]), "trois exemplaires");
+
+        log.Add(Line(ChatKind.Shout, "autre chose", "Jean", time: T0.AddMinutes(3)));
+        feed.Update(log, 0, NoMute);
+        Same(2, feed.Visible.Count, "un autre texte a sa ligne");
+        Same(1, feed.RepeatCount(feed.Visible[1]), "pas répété");
+    }
+
+    public static void RepeatsBreak()
+    {
+        var log = new ChatLog();
+        var feed = CollapsingFeed(ChatKind.Say, ChatKind.Damage);
+        feed.Update(log, 0, NoMute);
+
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+        log.Add(Line(ChatKind.Say, "salut", "Marie"));
+        log.Add(Line(ChatKind.Say, "salut", "Marie", time: T0.AddMinutes(6)));
+        log.Add(Line(ChatKind.Damage, "coup"));
+        log.Add(Line(ChatKind.Damage, "coup"));
+        feed.Update(log, 0, NoMute);
+
+        Same(5, feed.Visible.Count, "aucun regroupement");
+    }
+
+    public static void RepeatsDoNotCountAsUnread()
+    {
+        var log = new ChatLog();
+        var feed = CollapsingFeed(ChatKind.Say);
+        feed.Update(log, 0, NoMute);
+
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+        feed.Update(log, 0, NoMute);
+
+        Same(1, feed.Unread, "un seul non-lu");
+    }
+
+    public static void RepeatsSurviveRebuild()
+    {
+        var log = new ChatLog();
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+
+        var feed = CollapsingFeed(ChatKind.Say);
+        feed.Update(log, 0, NoMute);
+        feed.Update(log, 1, NoMute);
+
+        Same(1, feed.Visible.Count, "une ligne");
+        Same(2, feed.RepeatCount(feed.Visible[0]), "le compte ne s'additionne pas");
+    }
+
+    public static void SpamMatchesRules()
+    {
+        var filter = new SpamFilter();
+        filter.SetRules(new[] { "gils pas chers", " WTS ", "  ", "Épée" });
+
+        Check(filter.Matches(Line(ChatKind.Shout, "Vente de GILS PAS CHERS ici", "Jean")), "expression sans majuscules");
+        Check(filter.Matches(Line(ChatKind.Say, "wts mount", "Jean")), "mot");
+        Check(filter.Matches(Line(ChatKind.Say, "Je vends une epee", "Jean")), "sans accent");
+        Check(!filter.Matches(Line(ChatKind.Say, "On vend des gils ?", "Jean")), "expression incomplète");
+    }
+
+    public static void SpamIgnoresSystemAndNames()
+    {
+        var filter = new SpamFilter();
+        filter.SetRules(new[] { "jean" });
+
+        Check(!filter.Matches(Line(ChatKind.System, "jean s'est connecté")), "message système");
+        Check(!filter.Matches(Line(ChatKind.Say, "bonjour", "Jean")), "le nom de l'auteur");
+        Check(filter.Matches(Line(ChatKind.Say, "salut jean", "Marie")), "le texte");
+    }
+
+    private static readonly DateTime Today = new(2026, 11, 3);
+
+    private static bool Finds(string query, ChatLine line) => ChatSearch.Parse(query, Today).Matches(line);
+
+    public static void SearchFilters()
+    {
+        var line = Line(ChatKind.FreeCompany, "On part en raid", "Jean Dupont", time: T0);
+
+        Check(Finds("de:jean", line), "auteur");
+        Check(!Finds("de:marie", line), "autre auteur");
+        Check(Finds("canal:CL", line), "canal abrégé");
+        Check(Finds("canal:compagnie", line), "canal en entier");
+        Check(!Finds("canal:groupe", line), "autre canal");
+        Check(Finds("de:jean canal:cl raid", line), "tout ensemble");
+        Check(!Finds("de:jean canal:cl donjon", line), "un mot manque");
+
+        Check(Finds("date:03/11/2026", line), "date");
+        Check(!Finds("date:02/11/2026", line), "autre date");
+    }
+
+    public static void SearchQuotesAndWords()
+    {
+        var line = Line(ChatKind.Say, "On part en raid ce soir", "Jean Dupont");
+
+        Check(Finds("de:\"jean dupont\"", line), "nom complet entre guillemets");
+        Check(Finds("\"en raid\"", line), "expression");
+        Check(!Finds("\"raid en\"", line), "expression dans le désordre");
+        Check(Finds("raid part", line), "mots dans le désordre");
+        Check(ChatSearch.Parse("   ", Today).IsEmpty, "rien à chercher");
+    }
+
+    public static void SearchDates()
+    {
+        var at = new DateTime(2026, 11, 2, 12, 0, 0, DateTimeKind.Local).ToUniversalTime();
+        var line = Line(ChatKind.Say, "x", "Jean", time: at);
+
+        Check(Finds("date:hier", line), "hier");
+        Check(!Finds("date:aujourd'hui", line), "aujourd'hui");
+        Check(Finds("date:02/11", line), "sans année");
+        Check(Finds("date:2/11/2026", line), "avec année");
+        Check(Finds("date:2026-11-02", line), "format international");
+
+        var lastYear = new DateTime(2025, 12, 25, 12, 0, 0, DateTimeKind.Local).ToUniversalTime();
+        Check(Finds("date:25/12", Line(ChatKind.Say, "x", "Jean", time: lastYear)), "une date à venir désigne l'année passée");
+    }
+
+    public static void SearchUnknownPrefixIsText()
+    {
+        Check(Finds("12:30", Line(ChatKind.Say, "rendez-vous à 12:30", "Jean")), "une heure");
+        Check(Finds("date:bientot", Line(ChatKind.Say, "date:bientot", "Jean")), "une date illisible");
+    }
+
+    public static void FeedSearchIgnoresAccents()
+    {
+        var log = new ChatLog();
+        log.Add(Line(ChatKind.Say, "Une belle Épée", "Éric"));
+
+        var feed = Feed(ChatKind.Say);
+        feed.SetSearch("epee de:eric", Today);
+        feed.Update(log, 0, NoMute);
+
+        Same(1, feed.Visible.Count, "trouvé");
+    }
+
+    public static void NewMarkerIsFirstUnread()
+    {
+        var log = new ChatLog();
+        var feed = Feed(ChatKind.Say);
+        feed.Update(log, 0, NoMute);
+
+        log.Add(Line(ChatKind.Say, "un", "Jean"));
+        log.Add(Line(ChatKind.Say, "deux", "Jean"));
+        feed.Update(log, 0, NoMute);
+
+        Same(feed.Visible[0].Id, feed.FirstUnreadId, "premier non-lu");
+        feed.MarkRead();
+        Same(feed.Visible[0].Id, feed.FirstUnreadId, "lire l'onglet garde le repère à l'écran");
+
+        var active = Feed(ChatKind.Say);
+        active.IsActive = true;
+        active.Update(log, 0, NoMute);
+        log.Add(Line(ChatKind.Say, "trois", "Jean"));
+        active.Update(log, 0, NoMute);
+        Same(null, active.FirstUnreadId, "pas de repère dans l'onglet affiché");
+
+        active.MarkNewAt(active.Visible[^1].Id);
+        Same(active.Visible[^1].Id, active.FirstUnreadId, "repère posé quand on lisait plus haut");
+        active.ClearNewMarker();
+        Same(null, active.FirstUnreadId, "repère retiré");
+    }
+
+    public static void NewMarkerClearsOnLeave()
+    {
+        var log = new ChatLog();
+        var feed = Feed(ChatKind.Say);
+        feed.Update(log, 0, NoMute);
+        log.Add(Line(ChatKind.Say, "un", "Jean"));
+        feed.Update(log, 0, NoMute);
+
+        feed.IsActive = true;
+        Check(feed.FirstUnreadId != null, "encore là à l'ouverture");
+        feed.IsActive = false;
+        Same(null, feed.FirstUnreadId, "parti en quittant l'onglet");
+    }
+
+    public static void DateSeparators()
+    {
+        var yesterday = new DateTime(2026, 11, 2, 23, 50, 0, DateTimeKind.Local).ToUniversalTime();
+        var today = new DateTime(2026, 11, 3, 0, 5, 0, DateTimeKind.Local).ToUniversalTime();
+        var first = Line(ChatKind.Say, "a", "Jean", time: yesterday);
+        var second = Line(ChatKind.Say, "b", "Jean", time: today);
+        var third = Line(ChatKind.Say, "c", "Jean", time: today.AddMinutes(1));
+
+        Same(Today, LineSeparators.Between(first, second, null, Today).Day, "minuit passé");
+        Same(null, LineSeparators.Between(second, third, null, Today).Day, "même jour");
+        Same(Today.AddDays(-1), LineSeparators.Between(null, first, null, Today).Day, "premier message d'un autre jour");
+        Same(null, LineSeparators.Between(null, second, null, Today).Day, "premier message du jour");
+
+        second.Id = 42;
+        Check(LineSeparators.Between(first, second, 42, Today).NewMessages, "repère");
+        Check(!LineSeparators.Between(first, second, 41, Today).NewMessages, "pas ici");
+    }
+
+    public static void DateLabels()
+    {
+        Same("Aujourd'hui", ChatDates.Label(Today, Today), "aujourd'hui");
+        Same("Hier", ChatDates.Label(Today.AddDays(-1), Today), "hier");
+        Same("Dimanche 1er novembre", ChatDates.Label(new DateTime(2026, 11, 1), Today), "premier du mois");
+        Same("Jeudi 25 décembre 2025", ChatDates.Label(new DateTime(2025, 12, 25), Today), "autre année");
+    }
+
+    public static void ExportFormat()
+    {
+        var at = new DateTime(2026, 11, 3, 19, 50, 0, DateTimeKind.Local).ToUniversalTime();
+        var first = Line(ChatKind.FreeCompany, "bonsoir \uE0BB!", "Jean", time: at);
+        var second = Line(ChatKind.System, "Connexion", time: at);
+
+        var text = ChatExporter.Format(new[] { first, second }, l => ReferenceEquals(l, first) ? 3 : 1);
+
+        Same("2026-11-03 19:50 [Compagnie libre] Jean: bonsoir ! (x3)\n2026-11-03 19:50 [Système] Connexion\n", text, "texte");
+    }
+
+    public static void MacroExpansion()
+    {
+        string? Resolve(string name) => name switch
+        {
+            "t" => "Jean",
+            "flag" => "Limsa ( 10 , 11 )",
+            _ => null,
+        };
+
+        Same("Salut Jean à Limsa ( 10 , 11 )", MacroPreview.Expand("Salut <T> à <flag>", Resolve, out var changed), "remplacés");
+        Check(changed, "changement signalé");
+
+        Same("<inconnu> a<b", MacroPreview.Expand("<inconnu> a<b", Resolve, out changed), "laissés tels quels");
+        Check(!changed, "rien de remplacé");
+
+        Same("sans raccourci", MacroPreview.Expand("sans raccourci", Resolve, out changed), "texte normal");
     }
 
     public static void TrimRemovesBattleFirst()

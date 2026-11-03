@@ -20,8 +20,13 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 **Lire**
 - Deux présentations : moderne (le nom au-dessus de messages regroupés par auteur) ou compacte (tout sur une ligne).
 - Onglets à ta façon : chacun choisit ses canaux. Pastille de messages non lus, rouge pour une mention ou un message privé.
-- Recherche dans l'onglet affiché (Ctrl + F), par mot ou par joueur.
-- Noms, objets, cartes et adresses web cliquables. Survoler un objet montre son icône et son niveau. Une adresse s'affiche en entier avant de s'ouvrir.
+- Onglets détachables : sors un onglet dans sa propre fenêtre, par exemple le combat ou la compagnie libre dans un coin de l'écran.
+- Recherche dans l'onglet affiché (Ctrl + F), par mot, joueur, canal ou date : `de:Jean canal:CL date:hier`.
+- Noms, objets, cartes, quêtes, effets, annonces de recherche de groupe et adresses web cliquables. Survoler un objet, une quête ou un effet montre ses détails. Une adresse s'affiche en entier avant de s'ouvrir.
+- Une ligne « Nouveaux messages » là où tu t'es arrêté, et une autre quand la date change.
+- L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
+- Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
+- Export d'une conversation dans un fichier texte (clic droit sur l'onglet).
 - Tes messages sont retrouvés au prochain lancement (sur ton PC uniquement, un fichier par personnage, jamais le combat).
 
 **Écrire**
@@ -29,11 +34,12 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Tab passe au canal suivant, parmi ceux que tu peux vraiment utiliser (groupe, compagnie, linkshells...).
 - Les flèches rappellent tes derniers messages, sans perdre ce que tu étais en train d'écrire.
 - En tapant `/`, les commandes du jeu et des plugins sont proposées et se complètent avec Tab.
-- Un clic sur un nom : message privé, copier, masquer ses messages. Les derniers correspondants restent dans le menu des canaux.
+- Un aperçu montre ce que donneront `<t>`, `<flag>` et les autres raccourcis du jeu avant l'envoi.
+- Un clic sur un nom : message privé, copier, choisir sa couleur, masquer ses messages. Les derniers correspondants restent dans le menu des canaux.
 
 **Être prévenu**
 - Ton nom et les mots que tu choisis surlignent le message, avec un son si tu veux.
-- Un son à la réception d'un message privé.
+- Un son à la réception d'un message privé, et le jeu clignote dans la barre des tâches si tu es sur une autre fenêtre.
 
 ## Commandes
 
@@ -66,17 +72,22 @@ BetterChat/
 ├── Chat/
 │   ├── GameChat.cs         masquer le chat du jeu, touche d'ouverture, canal actif, envoi
 │   ├── MessageConverter.cs message du jeu vers texte coloré et liens
-│   └── ChannelColors.cs    couleur de chaque canal
+│   ├── ChannelColors.cs    couleur de chaque canal
+│   ├── MacroResolver.cs    aperçu des raccourcis du jeu (<t>, <flag>...)
+│   └── WindowAlert.cs      clignotement dans la barre des tâches
 ├── Core/                   logique sans dépendance au jeu (testée à part)
 │   ├── ChatKinds.cs        types de messages et noms affichés
 │   ├── ChatLine.cs         un message, regroupement par auteur
 │   ├── ChatLog.cs          messages en mémoire, onglets, non lus, recherche
 │   ├── TextLayout.cs       découpage du texte en lignes
 │   ├── ChatInput.cs        saisie : historique, canaux, commandes, mentions, liens
+│   ├── ChatSearch.cs       recherche avancée, anti-spam, séparateurs, export, aperçu
 │   └── ChatHistoryStore.cs messages enregistrés sur le disque
 ├── images/                 logo
 └── Windows/
-    ├── ChatWindow*.cs      la fenêtre de chat : onglets, messages, saisie
+    ├── ChatWindow*.cs      la fenêtre de chat : onglets, saisie
+    ├── MessageList.cs      la liste des messages, commune au chat et aux onglets détachés
+    ├── DetachedTabWindow.cs un onglet dans sa propre fenêtre
     └── ConfigWindow*.cs    les réglages (même base que DailyToDo et DPSmeter)
 Tests/BetterChat.Tests/     tests de la logique : dotnet run depuis ce dossier
 ```

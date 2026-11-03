@@ -247,6 +247,23 @@ public static class ChatKinds
     public static IEnumerable<ChatKind> InSection(ChatSection section) =>
         All.Where(i => i.Section == section).Select(i => i.Kind);
 
+    /// <summary>Les noms sous lesquels on peut chercher un canal (<c>canal:CL</c>, <c>canal:groupe</c>...).</summary>
+    public static IEnumerable<string> SearchNames(ChatKind kind)
+    {
+        var info = Info(kind);
+        yield return TextFold.Of(info.Tag);
+        yield return TextFold.Of(info.Label);
+
+        var command = ChatChannels.Command(kind);
+        if (command.Length > 1)
+            yield return TextFold.Of(command[1..]);
+
+        if (kind is ChatKind.FreeCompany or ChatKind.FreeCompanyAnnouncement or ChatKind.FreeCompanyLoginLogout)
+            yield return "cl";
+        if (IsTell(kind))
+            yield return "mp";
+    }
+
     public static bool IsBattle(ChatKind kind) => Info(kind).Section == ChatSection.Combat;
 
     public static bool IsTell(ChatKind kind) => kind is ChatKind.TellIncoming or ChatKind.TellOutgoing or ChatKind.GmTell;

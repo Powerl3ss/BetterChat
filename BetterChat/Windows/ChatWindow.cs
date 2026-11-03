@@ -15,29 +15,31 @@ namespace BetterChat.Windows;
 /// <summary>La fenêtre de chat : onglets en haut, messages au milieu, zone de saisie en bas.</summary>
 public sealed partial class ChatWindow : Window, IDisposable
 {
-    private const ImGuiWindowFlags BaseFlags =
+    internal const ImGuiWindowFlags BaseFlags =
         ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoCollapse |
         ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
         ImGuiWindowFlags.NoFocusOnAppearing;
 
     // Palette commune avec les réglages.
-    private static readonly Vector4 WindowBg = new(0.071f, 0.078f, 0.106f, 1f);
-    private static readonly Vector4 InputBg = new(0.140f, 0.150f, 0.200f, 0.85f);
-    private static readonly Vector4 HoverOverlay = new(1f, 1f, 1f, 0.05f);
-    private static readonly Vector4 Line = new(1f, 1f, 1f, 0.075f);
-    private static readonly Vector4 TextMain = new(0.93f, 0.94f, 0.97f, 1f);
-    private static readonly Vector4 TextDim = new(0.60f, 0.63f, 0.71f, 1f);
-    private static readonly Vector4 Danger = new(1f, 0.47f, 0.47f, 1f);
-    private static readonly Vector4 PopupBg = new(0.09f, 0.10f, 0.13f, 0.98f);
+    internal static readonly Vector4 WindowBg = new(0.071f, 0.078f, 0.106f, 1f);
+    internal static readonly Vector4 InputBg = new(0.140f, 0.150f, 0.200f, 0.85f);
+    internal static readonly Vector4 HoverOverlay = new(1f, 1f, 1f, 0.05f);
+    internal static readonly Vector4 Line = new(1f, 1f, 1f, 0.075f);
+    internal static readonly Vector4 TextMain = new(0.93f, 0.94f, 0.97f, 1f);
+    internal static readonly Vector4 TextDim = new(0.60f, 0.63f, 0.71f, 1f);
+    internal static readonly Vector4 Danger = new(1f, 0.47f, 0.47f, 1f);
+    internal static readonly Vector4 PopupBg = new(0.09f, 0.10f, 0.13f, 0.98f);
 
     // Marge commune à gauche et à droite : onglets, messages, saisie et icônes s'alignent dessus.
-    private const float EdgeMargin = 10f;
+    internal const float EdgeMargin = 10f;
 
     private readonly Plugin plugin;
     private Configuration Cfg => plugin.Configuration;
     private Vector4 Accent => Cfg.AccentColor with { W = 1f };
 
-    private static float S => ImGuiHelpers.GlobalScale;
+    internal static float S => ImGuiHelpers.GlobalScale;
+
+    private readonly MessageList messages;
 
     // Police à sa vraie taille : agrandir le texte avec SetWindowFontScale le rend flou.
     private IFontHandle? chatFont;
@@ -60,6 +62,7 @@ public sealed partial class ChatWindow : Window, IDisposable
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
         inputCallback = OnInputCallback;
+        messages = new MessageList(plugin, this);
     }
 
     public void Dispose() => chatFont?.Dispose();
@@ -99,24 +102,31 @@ public sealed partial class ChatWindow : Window, IDisposable
         if (focusRequested)
             ImGui.SetNextWindowFocus();
 
-        windowStyle = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero)
-                            .Push(ImGuiStyleVar.WindowRounding, 12f * S)
-                            .Push(ImGuiStyleVar.WindowBorderSize, 1f)
-                            .Push(ImGuiStyleVar.ScrollbarSize, 6f * S)
-                            .Push(ImGuiStyleVar.ScrollbarRounding, 6f * S)
-                            .Push(ImGuiStyleVar.PopupRounding, 8f * S)
-                            .Push(ImGuiStyleVar.FrameRounding, 8f * S);
-        windowColors = ImRaii.PushColor(ImGuiCol.WindowBg, WindowBg with { W = Math.Clamp(Cfg.WindowOpacity, 0f, 1f) })
-                             .Push(ImGuiCol.Border, Line)
-                             .Push(ImGuiCol.ChildBg, Vector4.Zero)
-                             .Push(ImGuiCol.PopupBg, PopupBg)
-                             .Push(ImGuiCol.ScrollbarBg, Vector4.Zero)
-                             .Push(ImGuiCol.ScrollbarGrab, new Vector4(1f, 1f, 1f, 0.14f))
-                             .Push(ImGuiCol.ScrollbarGrabHovered, new Vector4(1f, 1f, 1f, 0.24f))
-                             .Push(ImGuiCol.ScrollbarGrabActive, Accent with { W = 0.6f })
-                             .Push(ImGuiCol.ResizeGrip, new Vector4(1f, 1f, 1f, 0.06f))
-                             .Push(ImGuiCol.ResizeGripHovered, Accent with { W = 0.5f })
-                             .Push(ImGuiCol.ResizeGripActive, Accent with { W = 0.8f });
+        PushWindowStyle(Cfg, out windowStyle, out windowColors);
+    }
+
+    /// <summary>L'apparence commune à la fenêtre de chat et aux onglets détachés.</summary>
+    internal static void PushWindowStyle(Configuration cfg, out IDisposable style, out IDisposable colors)
+    {
+        var accent = cfg.AccentColor;
+        style = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero)
+                      .Push(ImGuiStyleVar.WindowRounding, 12f * S)
+                      .Push(ImGuiStyleVar.WindowBorderSize, 1f)
+                      .Push(ImGuiStyleVar.ScrollbarSize, 6f * S)
+                      .Push(ImGuiStyleVar.ScrollbarRounding, 6f * S)
+                      .Push(ImGuiStyleVar.PopupRounding, 8f * S)
+                      .Push(ImGuiStyleVar.FrameRounding, 8f * S);
+        colors = ImRaii.PushColor(ImGuiCol.WindowBg, WindowBg with { W = Math.Clamp(cfg.WindowOpacity, 0f, 1f) })
+                       .Push(ImGuiCol.Border, Line)
+                       .Push(ImGuiCol.ChildBg, Vector4.Zero)
+                       .Push(ImGuiCol.PopupBg, PopupBg)
+                       .Push(ImGuiCol.ScrollbarBg, Vector4.Zero)
+                       .Push(ImGuiCol.ScrollbarGrab, new Vector4(1f, 1f, 1f, 0.14f))
+                       .Push(ImGuiCol.ScrollbarGrabHovered, new Vector4(1f, 1f, 1f, 0.24f))
+                       .Push(ImGuiCol.ScrollbarGrabActive, accent with { W = 0.6f })
+                       .Push(ImGuiCol.ResizeGrip, new Vector4(1f, 1f, 1f, 0.06f))
+                       .Push(ImGuiCol.ResizeGripHovered, accent with { W = 0.5f })
+                       .Push(ImGuiCol.ResizeGripActive, accent with { W = 0.8f });
     }
 
     public override void PostDraw()
@@ -151,14 +161,14 @@ public sealed partial class ChatWindow : Window, IDisposable
                 DrawRevealedSearchBar(size, tabH, searchH, inputH);
 
             ImGui.SetCursorPos(new Vector2(0, tabH + searchH));
-            DrawMessages(new Vector2(size.X, MathF.Max(size.Y - tabH - searchH - inputH, 10f)));
+            messages.Draw(plugin.ActiveFeed, new Vector2(size.X, MathF.Max(size.Y - tabH - searchH - inputH, 10f)));
 
             ImGui.SetCursorPos(new Vector2(0, size.Y - inputH));
             DrawInputBar(size, inputH);
         }
     }
 
-    private IFontHandle? ChatFont()
+    internal IFontHandle? ChatFont()
     {
         var px = MathF.Round(Math.Clamp(Cfg.FontSize, 10f, 36f));
         if (chatFont == null || Math.Abs(px - chatFontPx) > 0.1f)
@@ -174,13 +184,18 @@ public sealed partial class ChatWindow : Window, IDisposable
 
     // ------------------------------------------------------------ Petits dessins
 
-    private static uint Col(Vector4 color) => ImGui.GetColorU32(color);
+    internal static uint Col(Vector4 color) => ImGui.GetColorU32(color);
+
+    private float Measure(string text) => messages.Measure(text);
+
+    internal void DrawOutlinedText(ImDrawListPtr drawList, Vector2 pos, Vector4 color, string text) =>
+        messages.DrawOutlinedText(drawList, pos, color, text);
 
     /// <summary>
     /// Position du bouton le plus à droite : c'est le dessin de l'icône qui s'aligne sur la marge,
     /// le bouton autour la dépasse légèrement (il n'est visible qu'au survol).
     /// </summary>
-    private static float RightButtonX(float windowWidth, FontAwesomeIcon icon, float buttonSize)
+    internal static float RightButtonX(float windowWidth, FontAwesomeIcon icon, float buttonSize)
     {
         var inset = (buttonSize - ConfigWindow.IconSize(icon).X) / 2f;
         return MathF.Round(windowWidth - EdgeMargin * S + inset - buttonSize); // sur un pixel entier, comme la croix et le fond
@@ -201,7 +216,7 @@ public sealed partial class ChatWindow : Window, IDisposable
     }
 
     /// <summary>La même taille pour tous les boutons à icône du chat, sur un nombre entier de pixels.</summary>
-    private static float IconButtonSize => MathF.Round(ImGui.GetTextLineHeight() + 8f * S);
+    internal static float IconButtonSize => MathF.Round(ImGui.GetTextLineHeight() + 8f * S);
 
     /// <summary>
     /// La croix de la police est nettement plus petite que les autres icônes : elle est tracée à la main,
@@ -221,7 +236,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
     }
 
-    private bool IconButton(string id, FontAwesomeIcon icon, float size, string? tooltip, bool active = false)
+    internal bool IconButton(string id, FontAwesomeIcon icon, float size, string? tooltip, bool active = false)
     {
         var min = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton(id, new Vector2(size, size));

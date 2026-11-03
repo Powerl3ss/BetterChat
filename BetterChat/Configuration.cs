@@ -36,10 +36,14 @@ public class Configuration : IPluginConfiguration
     public bool TextOutline { get; set; } = true;
     public float OutlineStrength { get; set; } = 0.90f;
     public Dictionary<ChatKind, Vector4> ChannelColors { get; set; } = new();
+    public bool ShowSeparators { get; set; } = true;
+    public bool ShowJobIcons { get; set; } = true;
+    public Dictionary<string, Vector4> PlayerColors { get; set; } = new();
 
     // --- Saisie ---
     public bool KeepFocusAfterSend { get; set; } = false;
     public bool CommandSuggestions { get; set; } = true;
+    public bool ShowMacroPreview { get; set; } = true;
 
     // --- Onglets ---
     // Vide par défaut : le fichier relu s'ajouterait à une liste préremplie. Le plugin la remplit au premier lancement.
@@ -51,10 +55,15 @@ public class Configuration : IPluginConfiguration
     public List<string> MentionWords { get; set; } = new();
     public bool SoundOnMention { get; set; } = true;
     public bool SoundOnTell { get; set; } = true;
+    public bool FlashOnTell { get; set; } = true;
     public int AlertSound { get; set; } = 1; // de 1 à 16, comme <se.1> dans le jeu
 
     // --- Joueurs masqués ---
     public List<string> MutedPlayers { get; set; } = new();
+
+    // --- Anti-spam ---
+    public List<string> SpamWords { get; set; } = new();
+    public bool CollapseRepeats { get; set; } = true;
 
     // --- Historique ---
     public bool KeepHistory { get; set; } = true;

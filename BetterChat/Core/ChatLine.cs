@@ -13,6 +13,9 @@ public enum LinkKind : byte
     Item = 2,
     Map = 3,
     Url = 4,
+    Quest = 5,
+    Status = 6,
+    PartyFinder = 7,
 }
 
 /// <summary>Ce qui se passe au clic sur un morceau de texte. Une seule classe, simple à enregistrer sur le disque.</summary>
@@ -38,6 +41,9 @@ public sealed class ChatLink
     public static ChatLink Map(uint territory, uint map, int rawX, int rawY, string label) =>
         new() { Kind = LinkKind.Map, Id = territory, MapId = map, RawX = rawX, RawY = rawY, Text = label };
     public static ChatLink Url(string url) => new() { Kind = LinkKind.Url, Text = url };
+    public static ChatLink Quest(uint id) => new() { Kind = LinkKind.Quest, Id = id };
+    public static ChatLink Status(uint id) => new() { Kind = LinkKind.Status, Id = id };
+    public static ChatLink PartyFinder(uint listingId) => new() { Kind = LinkKind.PartyFinder, Id = listingId };
 
     /// <summary>Destinataire de « /tell », avec le monde s'il est connu.</summary>
     [JsonIgnore]
@@ -85,6 +91,9 @@ public sealed class ChatLine
     /// <summary>Le joueur à l'origine du message, s'il est connu.</summary>
     public ChatLink? Author { get; init; }
 
+    /// <summary>Job de l'auteur quand il a écrit, s'il était dans le groupe ou à proximité. 0 : inconnu.</summary>
+    public uint AuthorJob { get; set; }
+
     /// <summary>Le message cite ton nom ou un mot surveillé.</summary>
     public bool Mentioned { get; set; }
 
@@ -92,13 +101,11 @@ public sealed class ChatLine
     [JsonIgnore]
     public bool FromHistory { get; set; }
 
-    /// <summary>Mise en page mémorisée par l'affichage.</summary>
-    [JsonIgnore]
-    public object? LayoutCache { get; set; }
-
     private string? senderText;
     private string? bodyText;
-    private string? searchText;
+    private string? foldedText;
+    private string? foldedBody;
+    private string? foldedAuthor;
 
     [JsonIgnore]
     public string SenderText => senderText ??= Join(Sender);
@@ -114,9 +121,16 @@ public sealed class ChatLine
     [JsonIgnore]
     public string CopyText => SenderText.Length > 0 ? $"{SenderText}: {BodyText}" : BodyText;
 
-    /// <summary>Texte en minuscules pour la recherche.</summary>
+    /// <summary>Nom et texte sans majuscules ni accents, pour la recherche.</summary>
     [JsonIgnore]
-    public string SearchText => searchText ??= $"{SenderText} {BodyText}".ToLowerInvariant();
+    public string FoldedText => foldedText ??= TextFold.Of($"{SenderText} {BodyText}");
+
+    /// <summary>Le texte seul, pour l'anti-spam : un nom de joueur ne doit pas déclencher un filtre.</summary>
+    [JsonIgnore]
+    public string FoldedBody => foldedBody ??= TextFold.Of(BodyText);
+
+    [JsonIgnore]
+    public string FoldedAuthor => foldedAuthor ??= TextFold.Of(Author != null ? $"{Author.Text} {SenderText}" : SenderText);
 
     private static string Join(List<ChatSpan> spans)
     {

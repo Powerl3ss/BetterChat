@@ -46,7 +46,8 @@ public sealed partial class ChatWindow
         var total = 0f;
         for (var i = 0; i < count; i++)
         {
-            widths[i] = TabWidth(plugin.Feeds[i]);
+            // Un onglet détaché a sa propre fenêtre : il n'a plus sa place dans la barre.
+            widths[i] = plugin.Feeds[i].Settings.Detached ? 0f : TabWidth(plugin.Feeds[i]);
             total += widths[i];
         }
 
@@ -56,6 +57,9 @@ public sealed partial class ChatWindow
 
         for (var i = 0; i < count; i++)
         {
+            if (plugin.Feeds[i].Settings.Detached)
+                continue;
+
             var width = MathF.Floor(widths[i] * shrink);
             DrawTab(i, new Vector2(x, 0f), new Vector2(width, height), i == activeIndex);
 
@@ -136,7 +140,7 @@ public sealed partial class ChatWindow
     }
 
     /// <summary>Haut et bas réels des chiffres, depuis la position d'écriture. La hauteur de la pastille en découle.</summary>
-    private static unsafe (float Top, float Bottom) DigitInk()
+    internal static unsafe (float Top, float Bottom) DigitInk()
     {
         var font = ImGui.GetFont();
         var glyph = font.FindGlyph('0');
@@ -246,7 +250,16 @@ public sealed partial class ChatWindow
             Tip.MenuSeparator();
 
             if (Tip.MenuItem("Marquer comme lu", FontAwesomeIcon.CheckDouble))
+            {
                 feed.MarkRead();
+                feed.ClearNewMarker();
+            }
+
+            if (plugin.CanDetachTab && Tip.MenuItem("Détacher dans une fenêtre", FontAwesomeIcon.ExternalLinkAlt))
+                plugin.SetDetached(feed.Settings, true);
+
+            if (Tip.MenuItem("Exporter dans un fichier...", FontAwesomeIcon.FileExport))
+                plugin.ExportFeed(feed);
 
             if (Tip.MenuItem("Options de l'onglet", FontAwesomeIcon.SlidersH))
                 plugin.OpenConfigAtTabs();
@@ -276,7 +289,7 @@ public sealed partial class ChatWindow
     {
         searchText = text;
         foreach (var feed in plugin.Feeds)
-            feed.SetSearch(text);
+            feed.SetSearch(feed.Settings.Detached ? string.Empty : text);
     }
 
     /// <summary>Fait avancer l'animation et renvoie la hauteur occupée en ce moment, sur un nombre entier de pixels.</summary>
@@ -301,6 +314,17 @@ public sealed partial class ChatWindow
         ImGui.PopClipRect();
     }
 
+    private static void DrawSearchHelp()
+    {
+        using var tooltip = Tip.Begin();
+        Tip.Title("Recherche avancée");
+        Tip.Note("Des mots : dans le nom et dans le texte");
+        Tip.Note("de:Jean : par joueur");
+        Tip.Note("canal:CL : par canal (groupe, mp, crier...)");
+        Tip.Note("date:hier ou date:03/11 : par jour");
+        Tip.Hint("Des guillemets gardent une expression entière");
+    }
+
     private void DrawSearchBar(Vector2 size, float top, float height)
     {
         var margin = EdgeMargin * S;
@@ -319,9 +343,12 @@ public sealed partial class ChatWindow
 
         var text = searchText;
         ImGui.PushStyleColor(ImGuiCol.FrameBg, InputBg);
-        if (ImGui.InputTextWithHint("##searchInput", "Rechercher un mot ou un joueur...", ref text, 128))
+        if (ImGui.InputTextWithHint("##searchInput", "Rechercher... (de:Jean canal:CL date:hier)", ref text, 128))
             ApplySearch(text);
         ImGui.PopStyleColor();
+
+        if (ImGui.IsItemHovered() && !ImGui.IsItemActive())
+            DrawSearchHelp();
 
         // Échap quitte d'abord la zone de texte : c'est à ce moment-là qu'on ferme la recherche.
         var escape = ImGui.IsItemDeactivated() && ImGui.IsKeyPressed(ImGuiKey.Escape, false);

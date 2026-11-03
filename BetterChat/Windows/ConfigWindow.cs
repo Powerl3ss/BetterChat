@@ -38,6 +38,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
     private int displaySection;
     private int editedTab;
     private string newWord = string.Empty;
+    private string newSpamWord = string.Empty;
+    private string newColorPlayer = string.Empty;
 
     // Styles de fenêtre poussés avant Begin (PreDraw) et retirés après End (PostDraw).
     private IDisposable? windowStyle;
@@ -471,7 +473,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
             TextDimmed("Entrée ouvre la saisie, Tab change de canal, les flèches rappellent tes derniers messages.");
             TextDimmed("Tape « /p bonjour » ou clique sur la pastille à gauche de la saisie pour choisir où écrire.");
             TextDimmed("Clique sur un nom, un objet ou une carte dans un message. Clic droit sur un message pour le copier.");
-            TextDimmed("Ctrl + F cherche dans l'onglet affiché. Clic droit sur un onglet pour ses options.");
+            TextDimmed("Ctrl + F cherche dans l'onglet affiché, par exemple : de:Jean canal:CL date:hier.");
+            TextDimmed("Clic droit sur un onglet : ses options, le détacher dans une fenêtre, l'exporter dans un fichier.");
         });
 
         if (changed)
@@ -595,6 +598,10 @@ public sealed partial class ConfigWindow : Window, IDisposable
             });
             changed |= ToggleRow("Compter les messages non lus", "Une pastille sur l'onglet. Mentions et messages privés restent signalés en rouge.", tab.ShowUnread, v => tab.ShowUnread = v);
 
+            // Le chat garde au moins un onglet : le dernier ne peut pas en sortir.
+            using (ImRaii.Disabled(!tab.Detached && !plugin.CanDetachTab))
+                ToggleRow("Dans sa propre fenêtre", "L'onglet sort du chat, pour le placer où tu veux : le combat dans un coin de l'écran, par exemple.", tab.Detached, v => plugin.SetDetached(tab, v));
+
             SettingRow("Canal à l'ouverture", "En ouvrant cet onglet, la saisie passe sur ce canal.", 220f * S, () =>
             {
                 ImGui.SetNextItemWidth(220f * S);
@@ -715,6 +722,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     using (ImRaii.Disabled(!Cfg.TextOutline))
                         changed |= SliderRow("Intensité du contour", null, Cfg.OutlineStrength, 0.1f, 1f, "%.2f", v => Cfg.OutlineStrength = v);
                     changed |= SliderRow("Taille du texte", null, Cfg.FontSize, 10f, 36f, "%.0f", v => Cfg.FontSize = MathF.Round(v));
+                    changed |= ToggleRow("Icônes de job", "À côté du nom des membres du groupe et des joueurs à proximité.", Cfg.ShowJobIcons, v => Cfg.ShowJobIcons = v);
+                    changed |= ToggleRow("Séparateurs", "Une ligne « Nouveaux messages » là où tu t'étais arrêté, et une autre quand la date change.", Cfg.ShowSeparators, v => Cfg.ShowSeparators = v);
                 });
 
                 SectionTitle("Saisie");
@@ -722,6 +731,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 {
                     changed |= ToggleRow("Garder le focus après l'envoi", "Pour enchaîner les messages. Désactivé : le jeu reprend le clavier, comme d'habitude.", Cfg.KeepFocusAfterSend, v => Cfg.KeepFocusAfterSend = v);
                     changed |= ToggleRow("Proposer les commandes", "En tapant « / » : commandes du jeu et des plugins, complétées avec Tab.", Cfg.CommandSuggestions, v => Cfg.CommandSuggestions = v);
+                    changed |= ToggleRow("Aperçu avant l'envoi", "Montre ce que donneront <t>, <flag> et les autres raccourcis du jeu.", Cfg.ShowMacroPreview, v => Cfg.ShowMacroPreview = v);
                 });
 
                 SectionTitle("Fenêtre");
@@ -825,9 +835,86 @@ public sealed partial class ConfigWindow : Window, IDisposable
         {
             changed |= ToggleRow("Son à la réception d'un message privé", null, Cfg.SoundOnTell, v => Cfg.SoundOnTell = v);
             changed |= ToggleRow("Son quand on me cite", null, Cfg.SoundOnMention, v => Cfg.SoundOnMention = v);
+            changed |= ToggleRow("Clignoter dans la barre des tâches", "À la réception d'un message privé, quand tu es sur une autre fenêtre.", Cfg.FlashOnTell, v => Cfg.FlashOnTell = v);
             changed |= SliderIntRow("Son utilisé", "Les sons du jeu, de <se.1> à <se.16>.", Cfg.AlertSound, 1, 16, v => Cfg.AlertSound = v);
             if (ImGui.Button("Écouter"))
                 GameChat.PlayAlert(Cfg.AlertSound);
+        });
+
+        SectionTitle("Anti-spam", plugin.SpamHidden > 0 ? $"{plugin.SpamHidden} masqué(s)" : null);
+        Card(() =>
+        {
+            if (ToggleRow("Regrouper les messages répétés", "Le même message du même joueur devient une seule ligne, avec « x3 ».", Cfg.CollapseRepeats, v => Cfg.CollapseRepeats = v))
+            {
+                plugin.FiltersChanged();
+                changed = true;
+            }
+
+            ImGui.TextUnformatted("Masquer les messages qui contiennent");
+            TextDimmed("Un mot ou une expression : « gils pas chers », « wts »... Sans tenir compte des majuscules ni des accents.");
+
+            string? removed = null;
+            foreach (var word in Cfg.SpamWords)
+            {
+                Row(() => ImGui.TextUnformatted(word), FrameH, () =>
+                {
+                    if (IconButton($"##rmSpam{word}", FontAwesomeIcon.Times, "Retirer", hoverColor: Danger))
+                        removed = word;
+                });
+            }
+
+            if (removed != null)
+            {
+                Cfg.SpamWords.Remove(removed);
+                plugin.SpamRulesChanged();
+                changed = true;
+            }
+
+            ImGui.SetNextItemWidth(260f * S);
+            var entered = ImGui.InputTextWithHint("##newSpam", "Ajouter un mot ou une expression...", ref newSpamWord, 80, ImGuiInputTextFlags.EnterReturnsTrue);
+            ImGui.SameLine();
+            if ((ImGui.Button("Ajouter##spam") || entered) && newSpamWord.Trim().Length > 0)
+            {
+                Cfg.SpamWords.Add(newSpamWord.Trim());
+                newSpamWord = string.Empty;
+                plugin.SpamRulesChanged();
+                changed = true;
+            }
+        });
+
+        SectionTitle("Couleur par joueur", $"{Cfg.PlayerColors.Count}");
+        Card(() =>
+        {
+            TextDimmed("Pour repérer tes amis ou ton groupe statique. Clique aussi sur un nom dans le chat pour lui choisir une couleur.");
+
+            string? removed = null;
+            foreach (var (name, color) in Cfg.PlayerColors.ToList())
+            {
+                var edited = new Vector3(color.X, color.Y, color.Z);
+                Row(() => ImGui.TextColored(color with { W = 1f }, name), FrameH * 2f + 4f * S, () =>
+                {
+                    if (ImGui.ColorEdit3($"##playerColor{name}", ref edited, ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoLabel))
+                        plugin.SetPlayerColor(name, new Vector4(edited, 1f), save: false);
+                    if (ImGui.IsItemDeactivatedAfterEdit())
+                        changed = true;
+
+                    ImGui.SameLine(0, 4f * S);
+                    if (IconButton($"##rmPlayerColor{name}", FontAwesomeIcon.Times, "Retirer", hoverColor: Danger))
+                        removed = name;
+                });
+            }
+
+            if (removed != null)
+                plugin.RemovePlayerColor(removed);
+
+            ImGui.SetNextItemWidth(260f * S);
+            var entered = ImGui.InputTextWithHint("##newPlayerColor", "Nom du joueur...", ref newColorPlayer, 40, ImGuiInputTextFlags.EnterReturnsTrue);
+            ImGui.SameLine();
+            if ((ImGui.Button("Ajouter##playerColor") || entered) && newColorPlayer.Trim().Length > 0)
+            {
+                plugin.SetPlayerColor(newColorPlayer.Trim(), Cfg.AccentColor with { W = 1f });
+                newColorPlayer = string.Empty;
+            }
         });
 
         SectionTitle("Joueurs masqués", $"{Cfg.MutedPlayers.Count}");

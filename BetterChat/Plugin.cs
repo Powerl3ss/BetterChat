@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Game.Chat;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.Command;
+using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -34,6 +37,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IGameConfig GameConfig { get; private set; } = null!;
     [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
+    [PluginService] internal static ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     private const string CommandName = "/bchat";
@@ -59,11 +63,16 @@ public sealed class Plugin : IDalamudPlugin
 
     public List<ChatFeed> Feeds { get; } = new();
 
+    private readonly SpamFilter spam = new();
+    private readonly Dictionary<string, DetachedTabWindow> detachedWindows = new();
+    private readonly Dictionary<string, Vector4> playerColors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly FileDialogManager fileDialog = new();
     private readonly MentionMatcher mentions = new();
     private readonly HashSet<ChatKind> wantedKinds = new();
     private readonly ChatWindow chatWindow;
     private readonly ConfigWindow configWindow;
 
+    private bool detachedWindowsDirty = true;
     private int filterVersion;
     private ulong loadedCharacter;
     private string mentionedName = string.Empty;
@@ -78,6 +87,12 @@ public sealed class Plugin : IDalamudPlugin
     public string LocalName => PlayerState.IsLoaded && !string.IsNullOrEmpty(PlayerState.CharacterName) ? PlayerState.CharacterName : string.Empty;
 
     public ChatFeed ActiveFeed => Feeds[Math.Clamp(Configuration.ActiveTab, 0, Feeds.Count - 1)];
+
+    /// <summary>Messages masqués par l'anti-spam depuis le lancement du jeu.</summary>
+    public int SpamHidden { get; private set; }
+
+    /// <summary>Le chat garde toujours au moins un onglet.</summary>
+    public bool CanDetachTab => Configuration.Tabs.Count(t => !t.Detached) > 1;
 
     /// <summary>Un autre plugin de chat chargé en même temps se disputerait la fenêtre du jeu et la touche Entrée.</summary>
     public bool OtherChatPluginLoaded
@@ -110,6 +125,10 @@ public sealed class Plugin : IDalamudPlugin
             (ex, what) => Log.Error(ex, what));
 
         Messages.Capacity = Configuration.MemoryLines;
+        spam.SetRules(Configuration.SpamWords);
+        foreach (var (name, color) in Configuration.PlayerColors)
+            playerColors[name] = color;
+
         RebuildFeeds();
         RefreshMentions();
 
@@ -129,7 +148,7 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.AddHandler(CommandName, commandInfo);
         CommandManager.AddHandler(LongCommandName, new CommandInfo(OnCommand) { HelpMessage = "Comme /bchat.", ShowInHelp = false });
 
-        PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
+        PluginInterface.UiBuilder.Draw += DrawUi;
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi += ToggleChat;
         ChatGui.ChatMessageUnhandled += OnChatMessage;
@@ -140,7 +159,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         Framework.Update -= OnFrameworkUpdate;
         ChatGui.ChatMessageUnhandled -= OnChatMessage;
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+        PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleChat;
 
@@ -157,6 +176,12 @@ public sealed class Plugin : IDalamudPlugin
         configWindow.Dispose();
 
         History.Flush();
+    }
+
+    private void DrawUi()
+    {
+        WindowSystem.Draw();
+        fileDialog.Draw();
     }
 
     // ---------------------------------------------------------------- Commande
@@ -188,21 +213,58 @@ public sealed class Plugin : IDalamudPlugin
 
         // Tes propres messages n'ont pas de lien sur ton nom, et il peut être précédé de ton numéro de groupe.
         var isOwn = LocalName.Length > 0 && line.AuthorKey.EndsWith(LocalName, StringComparison.Ordinal);
-        if (!isOwn && ChatKinds.Info(line.Kind).HasAuthor && mentions.Matches(line.BodyText))
-            line.Mentioned = true;
+        line.AuthorJob = JobOfAuthor(line, isOwn);
 
-        if (ChatKinds.IsTell(line.Kind) && line.Author != null && !isOwn)
-            RecentTells.Note(line.Author);
+        // Un message masqué reste en mémoire (retirer la règle le fait réapparaître), mais il n'alerte jamais.
+        if (spam.Matches(line))
+        {
+            SpamHidden++;
+        }
+        else
+        {
+            if (!isOwn && ChatKinds.Info(line.Kind).HasAuthor && mentions.Matches(line.BodyText))
+                line.Mentioned = true;
 
-        var muted = IsMuted(line);
-        if (!muted)
-            PlayAlertFor(line);
+            if (ChatKinds.IsTell(line.Kind) && line.Author != null && !isOwn)
+                RecentTells.Note(line.Author);
+
+            if (!IsMuted(line))
+                PlayAlertFor(line);
+        }
 
         Messages.Add(line);
 
         // Pendant le chargement de l'historique, les messages sont écrits une fois celui-ci fusionné.
         if (Configuration.KeepHistory && loadedCharacter != 0 && pendingHistory == null && !ChatKinds.IsBattle(line.Kind))
             History.Enqueue(line);
+    }
+
+    /// <summary>Le job de l'auteur, s'il est dans le groupe ou assez près pour que le jeu le connaisse.</summary>
+    private static uint JobOfAuthor(ChatLine line, bool isOwn)
+    {
+        if (!ChatKinds.Info(line.Kind).HasAuthor)
+            return 0;
+
+        if (isOwn && line.Kind != ChatKind.TellOutgoing)
+            return PlayerState.ClassJob.RowId;
+
+        var name = line.Author?.Text;
+        if (string.IsNullOrEmpty(name))
+            return 0;
+
+        foreach (var member in PartyList)
+        {
+            if (member.Name.TextValue == name)
+                return member.ClassJob.RowId;
+        }
+
+        foreach (var player in ObjectTable.PlayerObjects)
+        {
+            if (player.Name.TextValue == name)
+                return player.ClassJob.RowId;
+        }
+
+        return 0;
     }
 
     /// <summary>L'historique est lu : il passe avant les messages arrivés entre-temps, qui sont alors écrits à leur tour.</summary>
@@ -245,6 +307,9 @@ public sealed class Plugin : IDalamudPlugin
         if ((line.Kind == ChatKind.TellIncoming && Configuration.SoundOnTell) ||
             (line.Mentioned && Configuration.SoundOnMention))
             GameChat.PlayAlert(Configuration.AlertSound);
+
+        if (line.Kind == ChatKind.TellIncoming && Configuration.FlashOnTell)
+            WindowAlert.FlashIfInBackground();
     }
 
     private void OnFrameworkUpdate(IFramework framework)
@@ -256,6 +321,9 @@ public sealed class Plugin : IDalamudPlugin
             LoadCharacter(character);
         if (pendingHistory is { IsCompleted: true })
             MergeHistory();
+
+        if (detachedWindowsDirty)
+            SyncDetachedWindows();
 
         UpdateFeeds();
 
@@ -307,8 +375,10 @@ public sealed class Plugin : IDalamudPlugin
         var active = ActiveFeed;
         foreach (var feed in Feeds)
         {
-            feed.IsActive = ReferenceEquals(feed, active);
-            feed.Update(Messages, filterVersion, IsMuted);
+            // Un onglet détaché est toujours à l'écran : il n'a pas de messages « non lus ».
+            feed.IsActive = ReferenceEquals(feed, active) || feed.Settings.Detached;
+            feed.CollapseRepeats = Configuration.CollapseRepeats;
+            feed.Update(Messages, filterVersion, IsHidden);
         }
     }
 
@@ -326,6 +396,8 @@ public sealed class Plugin : IDalamudPlugin
             wantedKinds.Add(kind);
 
         Configuration.ActiveTab = Math.Clamp(Configuration.ActiveTab, 0, Feeds.Count - 1);
+        KeepActiveTabAttached();
+        detachedWindowsDirty = true;
         filterVersion++;
         UpdateFeeds();
     }
@@ -353,9 +425,60 @@ public sealed class Plugin : IDalamudPlugin
         mentions.SetWords(words);
     }
 
+    public ChatFeed? FeedFor(ChatTabSettings tab) => Feeds.Find(f => ReferenceEquals(f.Settings, tab));
+
+    /// <summary>Sort un onglet dans sa propre fenêtre, ou le remet dans le chat.</summary>
+    public void SetDetached(ChatTabSettings tab, bool detached)
+    {
+        if (tab.Detached == detached || (detached && !CanDetachTab))
+            return;
+
+        tab.Detached = detached;
+        FeedFor(tab)?.SetSearch(string.Empty); // la recherche du chat ne le concerne plus
+        KeepActiveTabAttached();
+        detachedWindowsDirty = true;
+        Configuration.Save();
+    }
+
+    /// <summary>L'onglet affiché dans le chat ne peut pas être détaché, et il en faut toujours un.</summary>
+    private void KeepActiveTabAttached()
+    {
+        var tabs = Configuration.Tabs;
+        if (tabs.All(t => t.Detached))
+            tabs[0].Detached = false;
+
+        if (tabs[Configuration.ActiveTab].Detached)
+            Configuration.ActiveTab = tabs.FindIndex(t => !t.Detached);
+    }
+
+    /// <summary>Ajoute et retire les fenêtres, hors du dessin : on ne touche pas à la liste pendant qu'elle est parcourue.</summary>
+    private void SyncDetachedWindows()
+    {
+        detachedWindowsDirty = false;
+
+        foreach (var (id, window) in detachedWindows.ToList())
+        {
+            if (!window.Tab.Detached || !Configuration.Tabs.Contains(window.Tab))
+            {
+                WindowSystem.RemoveWindow(window);
+                detachedWindows.Remove(id);
+            }
+        }
+
+        foreach (var tab in Configuration.Tabs)
+        {
+            if (!tab.Detached || detachedWindows.ContainsKey(tab.Id))
+                continue;
+
+            var window = new DetachedTabWindow(this, chatWindow, tab) { IsOpen = true };
+            detachedWindows[tab.Id] = window;
+            WindowSystem.AddWindow(window);
+        }
+    }
+
     public void SelectTab(int index)
     {
-        if (index < 0 || index >= Feeds.Count)
+        if (index < 0 || index >= Feeds.Count || Feeds[index].Settings.Detached)
             return;
 
         Configuration.ActiveTab = index;
@@ -372,6 +495,69 @@ public sealed class Plugin : IDalamudPlugin
     public bool IsMuted(ChatLine line) =>
         line.Author != null && Configuration.MutedPlayers.Count > 0 &&
         Configuration.MutedPlayers.Contains(line.Author.Text, StringComparer.OrdinalIgnoreCase);
+
+    private bool IsHidden(ChatLine line) => IsMuted(line) || spam.Matches(line);
+
+    /// <summary>À appeler quand la liste de l'anti-spam change : les messages déjà reçus suivent la nouvelle règle.</summary>
+    public void SpamRulesChanged()
+    {
+        spam.SetRules(Configuration.SpamWords);
+        FiltersChanged();
+    }
+
+    public Vector4? PlayerColor(ChatLink? link) =>
+        link is { Kind: LinkKind.Player } && playerColors.Count > 0 && playerColors.TryGetValue(link.Text, out var color) ? color : null;
+
+    public void SetPlayerColor(string name, Vector4 color, bool save = true)
+    {
+        // Une seule entrée par joueur, quelle que soit la façon d'écrire son nom.
+        foreach (var key in Configuration.PlayerColors.Keys.Where(k => k != name && string.Equals(k, name, StringComparison.OrdinalIgnoreCase)).ToList())
+            Configuration.PlayerColors.Remove(key);
+
+        Configuration.PlayerColors[name] = color;
+        playerColors[name] = color;
+        if (save)
+            Configuration.Save();
+    }
+
+    public void RemovePlayerColor(string name)
+    {
+        Configuration.PlayerColors.Remove(name);
+        playerColors.Remove(name);
+        Configuration.Save();
+    }
+
+    /// <summary>Propose d'enregistrer ce que l'onglet affiche (recherche comprise) dans un fichier texte.</summary>
+    public void ExportFeed(ChatFeed feed)
+    {
+        // Le texte est figé maintenant : ce qui s'exporte est ce qui était à l'écran au moment du clic.
+        var text = ChatExporter.Format(feed.Visible, feed.RepeatCount);
+        var count = feed.Visible.Count;
+
+        var safeName = string.Concat(feed.Settings.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        var fileName = $"BetterChat {safeName} {DateTime.Now:yyyy-MM-dd HH-mm}";
+        var folder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+        fileDialog.SaveFileDialog("Exporter la conversation", ".txt", fileName, ".txt", (confirmed, path) =>
+        {
+            if (!confirmed)
+                return;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    File.WriteAllText(path, text);
+                    Framework.RunOnTick(() => Print($"{count} message(s) exporté(s) dans {path}"));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Export de la conversation impossible");
+                    Framework.RunOnTick(() => Print($"Export impossible : {ex.Message}"));
+                }
+            });
+        }, folder, true);
+    }
 
     public void MutePlayer(string name)
     {
@@ -396,7 +582,10 @@ public sealed class Plugin : IDalamudPlugin
         History.Delete();
         Messages.Clear();
         foreach (var feed in Feeds)
+        {
             feed.MarkRead();
+            feed.ClearNewMarker();
+        }
     }
 
     public void RefreshCommandsIfNeeded()

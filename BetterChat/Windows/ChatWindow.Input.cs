@@ -56,10 +56,10 @@ public sealed partial class ChatWindow
     // Avec « discussion directe », la lettre qui ouvre le chat est encore dans la file d'ImGui à cette image.
     private bool directChatPending;
 
-    private void FocusInput() => focusRequested = true;
+    internal void FocusInput() => focusRequested = true;
 
     /// <summary>Ajoute un texte à la fin de la saisie et y donne le focus (lien d'objet...).</summary>
-    private void AppendToInput(string text)
+    internal void AppendToInput(string text)
     {
         AppendText(text);
         focusRequested = true;
@@ -111,6 +111,28 @@ public sealed partial class ChatWindow
 
         DrawInputFeedback();
         DrawSuggestions();
+        DrawMacroPreview();
+    }
+
+    /// <summary>Ce que deviendront &lt;t&gt;, &lt;flag&gt; et les autres raccourcis, juste au-dessus de la saisie.</summary>
+    private void DrawMacroPreview()
+    {
+        if (!Cfg.ShowMacroPreview || !inputActive || suggestions.Count > 0 || inputError != null || !inputText.Contains('<'))
+            return;
+
+        var preview = MacroPreview.Expand(inputText, MacroResolver.Resolve, out var changed);
+        if (!changed)
+            return;
+
+        var min = ImGui.GetItemRectMin();
+        var width = ImGui.GetItemRectSize().X;
+        ImGui.SetNextWindowPos(min - new Vector2(0f, 6f * S), ImGuiCond.Always, new Vector2(0f, 1f));
+
+        using var tooltip = Tip.Begin();
+        Tip.Note("Aperçu de ton message");
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + MathF.Max(width - Tip.Padding.X * 2f, 160f * S));
+        ImGui.TextUnformatted(preview);
+        ImGui.PopTextWrapPos();
     }
 
     private string ChannelText(ChatKind channel, bool typed)

@@ -95,6 +95,21 @@ internal static class MessageConverter
                     link = ChatLink.Map(map.TerritoryType.RowId, map.Map.RowId, map.RawX, map.RawY, map.PlaceName);
                     break;
 
+                case QuestPayload quest:
+                    Flush();
+                    link = ChatLink.Quest(quest.Quest.RowId);
+                    break;
+
+                case StatusPayload status:
+                    Flush();
+                    link = ChatLink.Status(status.Status.RowId);
+                    break;
+
+                case PartyFinderPayload listing when listing.LinkType != PartyFinderPayload.PartyFinderLinkType.PartyFinderNotification:
+                    Flush();
+                    link = ChatLink.PartyFinder(listing.ListingId);
+                    break;
+
                 case RawPayload raw when raw.Equals(RawPayload.LinkTerminator):
                     Flush();
                     link = null;

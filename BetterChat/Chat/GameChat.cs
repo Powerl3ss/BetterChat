@@ -397,8 +397,23 @@ public sealed unsafe class GameChat : IDisposable
     }
 
     /// <summary>Prépare le lien de cet objet : &lt;item&gt; dans un message l'affichera.</summary>
+    /// <summary>Ouvre une annonce de recherche de groupe depuis son lien dans le chat.</summary>
+    public static void OpenPartyFinder(uint listingId)
+    {
+        unsafe
+        {
+            var agent = AgentLookingForGroup.Instance();
+            if (agent != null)
+                agent->OpenListing(listingId);
+        }
+    }
+
+    /// <summary>Dernier objet lié depuis le chat, pour montrer ce que deviendra &lt;item&gt;.</summary>
+    public static uint LastLinkedItem { get; private set; }
+
     public static void LinkItem(uint itemId)
     {
+        LastLinkedItem = itemId;
         var agent = AgentChatLog.Instance();
         if (agent != null)
             agent->LinkItem(itemId);
