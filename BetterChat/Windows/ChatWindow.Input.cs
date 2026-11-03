@@ -272,10 +272,6 @@ public sealed partial class ChatWindow
             }
         }
 
-        ImGui.Dummy(new Vector2(0f, 1f * S));
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8f * S);
-        Tip.Hint("Tab dans la saisie : canal suivant");
-
         ImGui.EndPopup();
     }
 
