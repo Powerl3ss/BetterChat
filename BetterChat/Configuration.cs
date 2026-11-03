@@ -39,7 +39,8 @@ public class Configuration : IPluginConfiguration
     public bool ShowTimestamps { get; set; } = true;
     public bool ShowChannelTags { get; set; } = true;
     public bool UseGameColors { get; set; } = true;
-    public bool TextShadow { get; set; } = true;
+    public bool TextOutline { get; set; } = true;
+    public float OutlineStrength { get; set; } = 0.90f;
     public Dictionary<ChatKind, Vector4> ChannelColors { get; set; } = new();
 
     // --- Saisie ---

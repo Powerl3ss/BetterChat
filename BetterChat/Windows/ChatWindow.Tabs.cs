@@ -129,7 +129,7 @@ public sealed partial class ChatWindow
         var textEnd = max.X - 4f * S - (badge != null ? badgeW + 4f * S : 0f);
 
         drawList.PushClipRect(new Vector2(textX, min.Y), new Vector2(textEnd, max.Y), true);
-        drawList.AddText(new Vector2(textX, textY), Col(active || hovered ? TextMain : TextDim), feed.Settings.Name);
+        DrawOutlinedText(drawList, new Vector2(textX, textY), active || hovered ? TextMain : TextDim, feed.Settings.Name);
         drawList.PopClipRect();
 
         if (badge != null)

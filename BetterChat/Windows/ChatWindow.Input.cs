@@ -144,7 +144,7 @@ public sealed partial class ChatWindow
 
         var textPos = min + new Vector2(18f * S, (height - ImGui.GetTextLineHeight()) / 2f);
         drawList.PushClipRect(min, min + new Vector2(size.X - 4f * S, height), true);
-        drawList.AddText(textPos, Col(color), label);
+        DrawOutlinedText(drawList, textPos, color, label);
         drawList.PopClipRect();
 
         if (hovered)

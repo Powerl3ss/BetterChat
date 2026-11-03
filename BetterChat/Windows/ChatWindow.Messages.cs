@@ -107,8 +107,7 @@ public sealed partial class ChatWindow
     {
         var text = feed.Search.Length > 0 ? "Aucun message trouvé" : "Aucun message pour l'instant";
         var textSize = ImGui.CalcTextSize(text);
-        ImGui.SetCursorPos((size - textSize) / 2f);
-        ImGui.TextColored(TextDim with { W = TextAlpha }, text);
+        DrawOutlinedText(ImGui.GetWindowDrawList(), ImGui.GetWindowPos() + (size - textSize) / 2f, TextDim with { W = TextAlpha }, text);
     }
 
     // ------------------------------------------------------------ Mise en page
@@ -273,7 +272,7 @@ public sealed partial class ChatWindow
         var x = pos.X;
         if (line.Kind == ChatKind.TellOutgoing)
         {
-            DrawTextShadowed(drawList, new Vector2(x, pos.Y), channel with { W = TextAlpha }, "À ");
+            DrawOutlinedText(drawList, new Vector2(x, pos.Y), channel with { W = TextAlpha }, "À ");
             x += Measure("À ");
         }
 
@@ -299,12 +298,12 @@ public sealed partial class ChatWindow
             var pillMin = new Vector2(x, pos.Y + 1f * S);
             var pillMax = new Vector2(x + tagW + 10f * S, pos.Y + lineHeight - 1f * S);
             drawList.AddRectFilled(pillMin, pillMax, Col(channel with { W = 0.14f * TextAlpha }), lineHeight / 2f);
-            drawList.AddText(new Vector2(x + 5f * S, pos.Y), Col(channel with { W = TextAlpha }), tag);
+            DrawOutlinedText(drawList, new Vector2(x + 5f * S, pos.Y), channel with { W = TextAlpha }, tag);
             x = pillMax.X + 6f * S;
         }
 
         if (Cfg.ShowTimestamps)
-            drawList.AddText(new Vector2(x, pos.Y), Col(dim), line.TimeUtc.ToLocalTime().ToString("HH:mm"));
+            DrawOutlinedText(drawList, new Vector2(x, pos.Y), dim, line.TimeUtc.ToLocalTime().ToString("HH:mm"));
     }
 
     private void DrawRuns(LineLayout layout, Vector2 pos, Vector4 channel, bool hoverable)
@@ -324,7 +323,7 @@ public sealed partial class ChatWindow
     private void DrawRun(ImDrawListPtr drawList, Vector2 pos, string text, float width, Vector4 color, ChatLink? link, bool hoverable)
     {
         color = color with { W = color.W * TextAlpha };
-        DrawTextShadowed(drawList, pos, color, text);
+        DrawOutlinedText(drawList, pos, color, text);
 
         if (link == null)
             return;
@@ -341,10 +340,23 @@ public sealed partial class ChatWindow
             drawList.AddLine(new Vector2(pos.X, max.Y - 1f), new Vector2(max.X, max.Y - 1f), Col(color));
     }
 
-    private void DrawTextShadowed(ImDrawListPtr drawList, Vector2 pos, Vector4 color, string text)
+    /// <summary>Texte avec un contour : 8 copies sombres décalées, dessinées dessous. Il reste lisible sans fond.</summary>
+    private void DrawOutlinedText(ImDrawListPtr drawList, Vector2 pos, Vector4 color, string text)
     {
-        if (Cfg.TextShadow)
-            drawList.AddText(pos + new Vector2(1f, 1f), Col(new Vector4(0f, 0f, 0f, 0.65f * color.W)), text);
+        if (Cfg.TextOutline && Cfg.OutlineStrength > 0f)
+        {
+            var shadow = Col(new Vector4(0f, 0f, 0f, Math.Clamp(Cfg.OutlineStrength, 0f, 1f) * color.W));
+            var t = MathF.Max(1f, S);
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                for (var dy = -1; dy <= 1; dy++)
+                {
+                    if (dx != 0 || dy != 0)
+                        drawList.AddText(pos + new Vector2(dx * t, dy * t), shadow, text);
+                }
+            }
+        }
+
         drawList.AddText(pos, Col(color), text);
     }
 
