@@ -160,7 +160,7 @@ public sealed class MessageList
         timeColumn = Cfg.Style == ChatStyle.Modern && Cfg.ShowTimestamps ? MathF.Ceiling(Measure("00:00") + 6f * S) : 0f;
 
         var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor,
-                                   HashCode.Combine(Cfg.ShowJobIcons, Cfg.JobIconPercent), Cfg.ShowSeparators);
+                                   HashCode.Combine(Cfg.ShowJobIcons, Cfg.JobIconHeight), Cfg.ShowSeparators);
         var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
 
         if (rebuild)
@@ -394,7 +394,7 @@ public sealed class MessageList
     private bool HasJobIcon(ChatLine line) => Cfg.ShowJobIcons && line.AuthorJob != 0;
 
     // La case réservée à l'icône : les noms commencent au même endroit, quelle que soit la forme du dessin.
-    private float JobIconSize => MathF.Max(MathF.Round(lineHeight * Cfg.JobIconPercent / 100f), 1f);
+    private float JobIconSize => MathF.Max(MathF.Round(lineHeight * Cfg.JobIconHeight / 100f), 1f);
 
     private float JobIconAdvance => JobIconSize + MathF.Round(4f * S);
 
