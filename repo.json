@@ -3,7 +3,7 @@
     "Author": "Powerl3ss",
     "Name": "BetterChat",
     "InternalName": "BetterChat",
-    "AssemblyVersion": "0.1.16.0",
+    "AssemblyVersion": "0.1.17.0",
     "Description": "",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/Powerl3ss/BetterChat",
@@ -27,6 +27,6 @@
     "IconUrl": "https://raw.githubusercontent.com/Powerl3ss/BetterChat/main/BetterChat/images/icon.png",
     "IsHide": false,
     "IsTestingExclusive": false,
-    "LastUpdate": 1793674209
+    "LastUpdate": 1793674444
   }
 ]
