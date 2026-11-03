@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
@@ -450,82 +451,90 @@ public sealed partial class ChatWindow
 
     private void DrawLinePopups()
     {
-        if (ImGui.BeginPopup("##lineMenu"))
+        if (Tip.BeginMenu("##lineMenu"))
         {
             if (contextLine is { } line)
             {
                 if (line.Author != null && line.Author.Text != plugin.LocalName)
+                {
+                    Tip.MenuTitle(line.Author.TellTarget);
+                    Tip.MenuSeparator();
                     DrawPlayerActions(line.Author);
+                }
 
-                if (ImGui.MenuItem("Copier le message"))
+                if (Tip.MenuItem("Copier le message", FontAwesomeIcon.Copy))
                     ImGui.SetClipboardText(line.CopyText);
             }
 
-            ImGui.EndPopup();
+            Tip.EndMenu();
         }
 
-        if (ImGui.BeginPopup("##linkMenu"))
+        if (Tip.BeginMenu("##linkMenu"))
         {
             switch (contextLink?.Kind)
             {
                 case LinkKind.Player:
-                    ImGui.TextDisabled(contextLink.TellTarget);
-                    ImGui.Separator();
-                    DrawPlayerActions(contextLink);
+                    Tip.MenuTitle(contextLink.TellTarget);
+                    Tip.MenuSeparator();
+                    DrawPlayerActions(contextLink, separatorAfter: false);
                     break;
 
                 case LinkKind.Item:
                     var name = ItemName(contextLink.Id);
-                    ImGui.TextDisabled(name);
-                    ImGui.Separator();
-                    if (ImGui.MenuItem("Lier dans le chat"))
+                    Tip.MenuTitle(name);
+                    Tip.MenuSeparator();
+                    if (Tip.MenuItem("Lier dans le chat", FontAwesomeIcon.Link))
                     {
                         GameChat.LinkItem(contextLink.Id);
                         AppendToInput("<item>");
                     }
-                    if (ImGui.MenuItem("Copier le nom"))
+                    if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(name);
                     break;
 
                 case LinkKind.Map:
-                    if (ImGui.MenuItem("Ouvrir la carte"))
+                    Tip.MenuTitle(contextLink.Text);
+                    Tip.MenuSeparator();
+                    if (Tip.MenuItem("Ouvrir la carte", FontAwesomeIcon.MapMarkedAlt))
                         OpenMap(contextLink);
-                    if (ImGui.MenuItem("Copier le lieu"))
+                    if (Tip.MenuItem("Copier le lieu", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(contextLink.Text);
                     break;
 
                 case LinkKind.Url:
-                    if (ImGui.MenuItem("Copier le lien"))
+                    if (Tip.MenuItem("Copier le lien", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(contextLink.Text);
                     break;
             }
 
-            ImGui.EndPopup();
+            Tip.EndMenu();
         }
 
         DrawUrlConfirm();
     }
 
-    private void DrawPlayerActions(ChatLink player)
+    private void DrawPlayerActions(ChatLink player, bool separatorAfter = true)
     {
-        if (player.Text != plugin.LocalName && ImGui.MenuItem("Envoyer un message privé"))
+        if (player.Text != plugin.LocalName && Tip.MenuItem("Envoyer un message privé", FontAwesomeIcon.Envelope))
         {
             plugin.Game.SwitchToTell(player);
             FocusInput();
         }
 
-        if (ImGui.MenuItem("Copier le nom"))
+        if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))
             ImGui.SetClipboardText(player.TellTarget);
 
-        if (player.Text != plugin.LocalName && ImGui.MenuItem("Masquer ses messages"))
+        if (player.Text != plugin.LocalName && Tip.MenuItem("Masquer ses messages", FontAwesomeIcon.CommentSlash, danger: true))
             plugin.MutePlayer(player.Text);
 
-        ImGui.Separator();
+        if (separatorAfter)
+            Tip.MenuSeparator();
     }
 
     /// <summary>Un lien dans le chat peut mener n'importe où : l'adresse s'affiche en entier avant de l'ouvrir.</summary>
     private void DrawUrlConfirm()
     {
+        using var popupStyle = Tip.PushPopupStyle();
         if (!ImGui.BeginPopup("##urlConfirm"))
             return;
 

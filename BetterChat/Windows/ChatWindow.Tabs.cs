@@ -236,30 +236,30 @@ public sealed partial class ChatWindow
 
     private void DrawTabMenu()
     {
-        if (!ImGui.BeginPopup("##tabMenu"))
+        if (!Tip.BeginMenu("##tabMenu"))
             return;
 
         if (menuTab >= 0 && menuTab < plugin.Feeds.Count)
         {
             var feed = plugin.Feeds[menuTab];
-            ImGui.TextDisabled(feed.Settings.Name);
-            ImGui.Separator();
+            Tip.MenuTitle(feed.Settings.Name);
+            Tip.MenuSeparator();
 
-            if (ImGui.MenuItem("Marquer comme lu"))
+            if (Tip.MenuItem("Marquer comme lu", FontAwesomeIcon.CheckDouble))
                 feed.MarkRead();
 
-            if (ImGui.MenuItem("Options de l'onglet"))
+            if (Tip.MenuItem("Options de l'onglet", FontAwesomeIcon.SlidersH))
                 plugin.OpenConfigAtTabs();
 
-            ImGui.Separator();
-            if (ImGui.MenuItem(Cfg.Locked ? "Déverrouiller la fenêtre" : "Verrouiller la fenêtre"))
+            Tip.MenuSeparator();
+            if (Tip.MenuItem("Fenêtre verrouillée", FontAwesomeIcon.Lock, toggled: Cfg.Locked))
             {
                 Cfg.Locked = !Cfg.Locked;
                 Cfg.Save();
             }
         }
 
-        ImGui.EndPopup();
+        Tip.EndMenu();
     }
 
     // ------------------------------------------------------------ Recherche
