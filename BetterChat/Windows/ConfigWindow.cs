@@ -247,7 +247,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         ImGui.SetCursorScreenPos(boxMin);
         ImGui.Dummy(new Vector2(box, box));
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(IsDaytime ? "Journée (8h00 - 20h00)" : "Soirée (20h00 - 8h00)");
+            Tip.Show(IsDaytime ? "Journée (8h00 - 20h00)" : "Soirée (20h00 - 8h00)");
         DrawIconCentered(dayIcon, boxMin, boxMin + new Vector2(box, box), IsDaytime ? SunColor : MoonColor);
         ImGui.SetWindowFontScale(1f);
 
@@ -309,7 +309,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
             DrawIconCentered(icon, min, max, active ? Accent : hovered ? TextMain : TextDim);
             if (hovered)
-                ImGui.SetTooltip(label);
+                Tip.Show(label);
         }
     }
 
@@ -488,7 +488,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             structureChanged = true;
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Ctrl + clic : remplace tous tes onglets par ceux d'origine.");
+            Tip.Show("Ctrl + clic : remplace tous tes onglets par ceux d'origine.");
 
         ImGui.Dummy(new Vector2(0, 4f * S));
 
@@ -847,7 +847,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 ImGui.GetIO().KeyCtrl)
                 plugin.ClearMessages();
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Ctrl + clic : efface l'affichage et le fichier de ce personnage.");
+                Tip.Show("Ctrl + clic : efface l'affichage et le fichier de ce personnage.");
         });
 
         if (mentionsChanged)

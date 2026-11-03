@@ -157,7 +157,7 @@ public sealed partial class ChatWindow
     private static void DrawChannelTooltip(Vector2 pillMin, string label, Vector4 color)
     {
         ImGui.SetNextWindowPos(pillMin - new Vector2(0f, 6f * S), ImGuiCond.Always, new Vector2(0f, 1f));
-        using var tooltip = ImRaii.Tooltip();
+        using var tooltip = Tip.Begin();
 
         var start = ImGui.GetCursorScreenPos();
         var dotRadius = 3.5f * S;
@@ -166,8 +166,8 @@ public sealed partial class ChatWindow
         ImGui.TextColored(color, label);
 
         ImGui.Dummy(new Vector2(0f, 2f * S));
-        ImGui.TextColored(TextDim, "Clic : changer de canal");
-        ImGui.TextColored(TextDim, "Tab dans la saisie : canal suivant");
+        Tip.Hint("Clic : changer de canal");
+        Tip.Hint("Tab dans la saisie : canal suivant");
     }
 
     /// <summary>Le menu s'ouvre au-dessus de la pastille. S'il n'a pas la place (chat en haut de l'écran), il passe dessous.</summary>
@@ -391,11 +391,11 @@ public sealed partial class ChatWindow
             return;
 
         var min = ImGui.GetItemRectMin();
-        var lineH = ImGui.GetTextLineHeightWithSpacing();
-        var height = lineH * (suggestions.Count + 1) + ImGui.GetStyle().WindowPadding.Y * 2f;
+        var lineH = ImGui.GetTextLineHeight() + Tip.Spacing.Y; // espacement de l'infobulle stylée
+        var height = lineH * (suggestions.Count + 1) + Tip.Padding.Y * 2f;
         ImGui.SetNextWindowPos(new Vector2(min.X, min.Y - height - 6f * S));
 
-        using var tooltip = ImRaii.Tooltip();
+        using var tooltip = Tip.Begin();
 
         for (var i = 0; i < suggestions.Count; i++)
         {
@@ -408,7 +408,7 @@ public sealed partial class ChatWindow
             }
         }
 
-        ImGui.TextColored(TextDim, "Tab : compléter  |  Flèches : choisir");
+        Tip.Hint("Tab : compléter  |  Flèches : choisir");
     }
 
     private static string Shorten(string text, int max) => text.Length <= max ? text : text[..max] + "...";

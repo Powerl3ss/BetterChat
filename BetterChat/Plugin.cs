@@ -97,6 +97,8 @@ public sealed class Plugin : IDalamudPlugin
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        // Infobulles : même style dans les trois plugins, avec la couleur d'accent choisie.
+        BetterChat.Windows.Tip.AccentProvider = () => Configuration.AccentColor;
         if (Configuration.Tabs.Count == 0)
             Configuration.Tabs = ChatTabPresets.Default();
 

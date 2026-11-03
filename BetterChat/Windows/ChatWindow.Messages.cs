@@ -405,13 +405,13 @@ public sealed partial class ChatWindow
                 DrawItemTooltip(link.Id);
                 break;
             case LinkKind.Map:
-                ImGui.SetTooltip($"{(link.Text.Length > 0 ? link.Text + "\n" : string.Empty)}Clic : ouvrir la carte");
+                Tip.Show($"{(link.Text.Length > 0 ? link.Text + "\n" : string.Empty)}Clic : ouvrir la carte");
                 break;
             case LinkKind.Url:
-                ImGui.SetTooltip($"{link.Text}\nClic : ouvrir le lien (une confirmation est demandée)");
+                Tip.Show($"{link.Text}\nClic : ouvrir le lien (une confirmation est demandée)");
                 break;
             case LinkKind.Player:
-                ImGui.SetTooltip($"{link.Text}{(link.World.Length > 0 ? " (" + link.World + ")" : string.Empty)}\nClic : message privé, copier, masquer");
+                Tip.Show($"{link.Text}{(link.World.Length > 0 ? " (" + link.World + ")" : string.Empty)}\nClic : message privé, copier, masquer");
                 break;
         }
     }
@@ -422,7 +422,7 @@ public sealed partial class ChatWindow
         if (item == null)
             return;
 
-        using var tooltip = ImRaii.Tooltip();
+        using var tooltip = Tip.Begin();
 
         var icon = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(item.Value.Icon));
         if (icon.TryGetWrap(out var wrap, out _) && wrap != null)
@@ -432,10 +432,10 @@ public sealed partial class ChatWindow
         }
 
         ImGui.BeginGroup();
-        ImGui.TextUnformatted(item.Value.Name.ExtractText());
+        Tip.Title(item.Value.Name.ExtractText());
         if (item.Value.LevelItem.RowId > 1)
-            ImGui.TextColored(TextDim, $"Niveau d'objet {item.Value.LevelItem.RowId}");
-        ImGui.TextColored(TextDim, "Clic : copier, lier dans le chat");
+            Tip.Note($"Niveau d'objet {item.Value.LevelItem.RowId}");
+        Tip.Hint("Clic : copier, lier dans le chat");
         ImGui.EndGroup();
     }
 

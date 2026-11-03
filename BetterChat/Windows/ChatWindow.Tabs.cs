@@ -216,7 +216,7 @@ public sealed partial class ChatWindow
             DrawBadge(badge, textEnd + BadgeGap * S, textY, feed.UnreadMentions > 0);
 
         if (hovered && size.X < ImGui.CalcTextSize(feed.Settings.Name).X + TabPadding * 2f * S)
-            ImGui.SetTooltip(feed.Settings.Name);
+            Tip.Show(feed.Settings.Name);
     }
 
     private void MoveUnderline(float x, float width)

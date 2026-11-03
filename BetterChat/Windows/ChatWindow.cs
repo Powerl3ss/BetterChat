@@ -251,7 +251,7 @@ public sealed partial class ChatWindow : Window, IDisposable
             ConfigWindow.DrawIconCentered(icon, min, min + new Vector2(size, size), color);
 
         if (tooltip != null && hovered)
-            ImGui.SetTooltip(tooltip);
+            Tip.Show(tooltip);
         return clicked;
     }
 }
