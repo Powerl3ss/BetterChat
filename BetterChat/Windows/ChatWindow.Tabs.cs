@@ -14,7 +14,7 @@ public sealed partial class ChatWindow
     private const float SearchRevealSpeed = 14f;
     private const float BadgeGap = 6f;
     private const float BadgeDotSize = 6f;
-    private const float BadgeDotGap = 4f;
+    private const float BadgeDotGap = 3f;
 
     private int menuTab = -1;
     private bool searchOpen;
