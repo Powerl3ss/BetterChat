@@ -67,7 +67,11 @@ public sealed partial class ChatWindow : Window, IDisposable
         inputCallback = OnInputCallback;
     }
 
-    public void Dispose() => chatFont?.Dispose();
+    public void Dispose()
+    {
+        chatFont?.Dispose();
+        badgeFont?.Dispose();
+    }
 
     /// <summary>Vrai si la fenêtre a été dessinée à l'instant : sinon, seule la zone de saisie du jeu peut servir.</summary>
     public bool IsShownNow => IsOpen && (DateTime.UtcNow - lastDraw).TotalSeconds < 0.5;
@@ -212,7 +216,7 @@ public sealed partial class ChatWindow : Window, IDisposable
     private static float RightButtonX(float windowWidth, FontAwesomeIcon icon, float buttonSize)
     {
         var inset = (buttonSize - ConfigWindow.IconSize(icon).X) / 2f;
-        return windowWidth - EdgeMargin * S + inset - buttonSize;
+        return MathF.Round(windowWidth - EdgeMargin * S + inset - buttonSize); // sur un pixel entier, comme la croix et le fond
     }
 
     /// <summary>
@@ -240,8 +244,14 @@ public sealed partial class ChatWindow : Window, IDisposable
     {
         var reach = ConfigWindow.IconGlyphSize(FontAwesomeIcon.Cog).Y / 2f * 0.72f;
         var thickness = MathF.Max(1.5f, 2f * S);
-        drawList.AddLine(center - new Vector2(reach, reach), center + new Vector2(reach, reach), Col(color), thickness);
-        drawList.AddLine(center + new Vector2(-reach, reach), center + new Vector2(reach, -reach), Col(color), thickness);
+
+        // Tracé direct : AddLine décale tout d'un demi-pixel en bas à droite, ce qui décentrait la croix.
+        drawList.PathLineTo(center - new Vector2(reach, reach));
+        drawList.PathLineTo(center + new Vector2(reach, reach));
+        drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
+        drawList.PathLineTo(center + new Vector2(-reach, reach));
+        drawList.PathLineTo(center + new Vector2(reach, -reach));
+        drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
     }
 
     private bool IconButton(string id, FontAwesomeIcon icon, float size, string? tooltip, bool active = false)
@@ -254,7 +264,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         // Le dessin de l'icône est calé sur un pixel entier : les fonds se centrent sur lui, pas sur le bouton.
         var isCross = icon == FontAwesomeIcon.Times;
         var center = isCross
-            ? min + new Vector2(size, size) / 2f
+            ? new Vector2(MathF.Round(min.X + size / 2f), MathF.Round(min.Y + size / 2f))
             : ConfigWindow.IconVisualCenter(icon, min, min + new Vector2(size, size));
         var half = new Vector2(size / 2f, size / 2f);
 

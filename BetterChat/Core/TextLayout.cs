@@ -158,3 +158,56 @@ public static class TextLayout
     private static bool IsCjk(char c) =>
         c is >= '　' and <= '鿿' or >= '가' and <= '힯' or >= '豈' and <= '﫿' or >= '＀' and <= '￯';
 }
+
+/// <summary>Le dessin d'un caractère par rapport à sa position d'écriture.</summary>
+public readonly record struct GlyphBox(float Left, float Right);
+
+/// <summary>
+/// Place les chiffres d'une pastille. La police ne donne pas la même largeur à tous les chiffres : chacun est donc
+/// centré dans une case de largeur fixe, et « 11 » ou « 42 » restent réguliers. Les positions sont des pixels entiers.
+/// </summary>
+public sealed class BadgeLayout
+{
+    private BadgeLayout(float[] penX, float inkMiddle, float width)
+    {
+        PenX = penX;
+        InkMiddle = inkMiddle;
+        Width = width;
+    }
+
+    /// <summary>Position d'écriture de chaque caractère.</summary>
+    public float[] PenX { get; }
+
+    /// <summary>Milieu réel de ce qui est dessiné : c'est sur lui que la pastille se centre.</summary>
+    public float InkMiddle { get; }
+
+    public float Width { get; }
+
+    /// <param name="cellWidth">Largeur d'une case, celle du chiffre le plus large.</param>
+    /// <param name="gap">Espace entre deux cases.</param>
+    /// <param name="padding">Marge entre les chiffres et le bord de la pastille.</param>
+    /// <param name="minWidth">Largeur minimale : la hauteur, pour qu'un seul chiffre donne un rond.</param>
+    public static BadgeLayout Compute(IReadOnlyList<GlyphBox> glyphs, float cellWidth, float gap, float padding, float minWidth)
+    {
+        var pens = new float[glyphs.Count];
+        var inkLeft = float.MaxValue;
+        var inkRight = float.MinValue;
+
+        for (var i = 0; i < glyphs.Count; i++)
+        {
+            var box = glyphs[i];
+            var inkWidth = box.Right - box.Left;
+            var cellLeft = i * (cellWidth + gap);
+            var pen = MathF.Round(cellLeft + (cellWidth - inkWidth) / 2f - box.Left);
+
+            pens[i] = pen;
+            inkLeft = Math.Min(inkLeft, pen + box.Left);
+            inkRight = Math.Max(inkRight, pen + box.Right);
+        }
+
+        if (glyphs.Count == 0)
+            return new BadgeLayout(pens, 0f, minWidth);
+
+        return new BadgeLayout(pens, (inkLeft + inkRight) / 2f, Math.Max(minWidth, inkRight - inkLeft + padding * 2f));
+    }
+}

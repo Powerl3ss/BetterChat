@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Dalamud.Game.Config;
+using Dalamud.Utility;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.System.String;
@@ -9,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Excel.Sheets;
 using BetterChat.Core;
 using AtkValueType = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType;
 
@@ -66,6 +68,72 @@ public sealed unsafe class GameChat : IDisposable
     public GameChat()
     {
         Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreRefresh, "ChatLog", OnChatLogRefresh);
+        LoadGameCommands();
+    }
+
+    /// <summary>Numéros des canaux dans la liste des commandes du jeu.</summary>
+    private static readonly (ChatKind Kind, uint[] Rows)[] ChannelCommandRows = BuildChannelCommandRows();
+
+    private static (ChatKind Kind, uint[] Rows)[] BuildChannelCommandRows()
+    {
+        var rows = new List<(ChatKind, uint[])>
+        {
+            (ChatKind.Say, new uint[] { 102 }),
+            (ChatKind.Shout, new uint[] { 103 }),
+            (ChatKind.Yell, new uint[] { 117 }),
+            (ChatKind.Party, new uint[] { 105 }),
+            (ChatKind.Alliance, new uint[] { 119 }),
+            (ChatKind.FreeCompany, new uint[] { 115 }),
+            (ChatKind.PvpTeam, new uint[] { 91 }),
+            (ChatKind.NoviceNetwork, new uint[] { 101 }),
+            (ChatKind.TellOutgoing, new uint[] { 104, 118 }),
+        };
+
+        for (var i = 1; i <= 8; i++)
+        {
+            rows.Add((ChatKinds.CrossLinkshell(i), new[] { (uint)(12 + i) }));
+            rows.Add((ChatKinds.Linkshell(i), new[] { (uint)(106 + i) }));
+        }
+
+        return rows.ToArray();
+    }
+
+    /// <summary>Reprend du jeu les commandes des canaux, et le nom de Crier et Hurler : tout suit la langue du client.</summary>
+    private static void LoadGameCommands()
+    {
+        try
+        {
+            var sheet = Plugin.DataManager.GetExcelSheet<TextCommand>();
+            foreach (var (kind, rows) in ChannelCommandRows)
+            {
+                var commands = new List<string>();
+                foreach (var id in rows)
+                {
+                    if (sheet.GetRowOrDefault(id) is not { } row)
+                        continue;
+
+                    foreach (var text in new[] { row.ShortCommand, row.ShortAlias, row.Command, row.Alias })
+                    {
+                        var command = text.ExtractText();
+                        if (command.Length > 1 && command[0] == '/' && !commands.Contains(command))
+                            commands.Add(command);
+                    }
+                }
+
+                ChatChannels.SetCommands(kind, commands);
+
+                if (kind is ChatKind.Shout or ChatKind.Yell && sheet.GetRowOrDefault(rows[0]) is { } named)
+                {
+                    var name = named.Command.ExtractText().TrimStart('/');
+                    if (name.Length > 1)
+                        ChatKinds.Rename(kind, char.ToUpper(name[0]) + name[1..]);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Commandes du jeu illisibles : les commandes par défaut restent utilisées");
+        }
     }
 
     public void Dispose()
@@ -217,8 +285,8 @@ public sealed unsafe class GameChat : IDisposable
         if (Plugin.ObjectTable.LocalPlayer is { } player && player.CompanyTag.TextValue.Length > 0)
             choices.Add(new(ChatKind.FreeCompany, "Compagnie libre"));
 
-        choices.Add(new(ChatKind.Yell, "Crier"));
-        choices.Add(new(ChatKind.Shout, "Hurler"));
+        choices.Add(new(ChatKind.Yell, ChatKinds.Info(ChatKind.Yell).Label));
+        choices.Add(new(ChatKind.Shout, ChatKinds.Info(ChatKind.Shout).Label));
 
         for (var i = 1; i <= 8; i++)
         {
@@ -238,11 +306,41 @@ public sealed unsafe class GameChat : IDisposable
         return choices;
     }
 
+    /// <summary>
+    /// Change de canal directement, sans passer par une commande : celles-ci dépendent de la langue du jeu
+    /// (en français, /sh n'est pas la commande attendue et le jeu répond par une erreur).
+    /// </summary>
     public void SwitchChannel(ChatKind kind)
     {
-        var command = ChatChannels.Command(kind);
-        if (command.Length > 0)
-            Run(command);
+        var channel = ChatChannels.ToGameChannel(kind);
+        if (channel < 0)
+            return;
+
+        var linkshell = ChatChannels.LinkshellIndex(kind);
+        Plugin.Framework.RunOnTick(() =>
+        {
+            var shell = RaptureShellModule.Instance();
+            if (shell == null || IsEmptyLinkshell(kind))
+                return;
+
+            var noTarget = Utf8String.FromString(string.Empty);
+            shell->ChangeChatChannel(channel, linkshell, noTarget, true);
+            noTarget->Dtor(true);
+        });
+    }
+
+    /// <summary>Un onglet peut viser une linkshell que ce personnage n'a pas.</summary>
+    private static bool IsEmptyLinkshell(ChatKind kind)
+    {
+        for (var i = 1; i <= 8; i++)
+        {
+            if (kind == ChatKinds.Linkshell(i))
+                return LinkshellName(i).Length == 0;
+            if (kind == ChatKinds.CrossLinkshell(i))
+                return CrossLinkshellName(i).Length == 0;
+        }
+
+        return false;
     }
 
     /// <summary>Passe le jeu en message privé vers ce joueur (les prochains messages partent vers lui).</summary>

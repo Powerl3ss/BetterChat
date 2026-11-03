@@ -103,9 +103,68 @@ public sealed class InputHistory
 /// <summary>Les canaux où écrire : commande correspondante et conversion depuis le numéro du jeu.</summary>
 public static class ChatChannels
 {
-    /// <summary>Commande qui fait passer le jeu sur ce canal, ou vide s'il n'y en a pas.</summary>
+    private static readonly Dictionary<ChatKind, string> GameShortcuts = new();
+
+    /// <summary>
+    /// Les commandes d'un canal selon le jeu : elles changent avec sa langue (/sh n'est pas le même partout).
+    /// La première est celle affichée dans les menus.
+    /// </summary>
+    public static void SetCommands(ChatKind kind, IReadOnlyList<string> commands)
+    {
+        if (commands.Count == 0)
+            return;
+
+        foreach (var known in Prefixes.Where(p => p.Value == kind).Select(p => p.Key).ToList())
+            Prefixes.Remove(known);
+
+        foreach (var command in commands)
+            Prefixes[command] = kind;
+
+        GameShortcuts[kind] = commands[0];
+    }
+
+    /// <summary>Numéro du canal pour le jeu (RaptureShellModule.ChatType), ou -1 si on ne peut pas y écrire directement.</summary>
+    public static int ToGameChannel(ChatKind kind)
+    {
+        if (kind >= ChatKind.Linkshell1 && kind <= ChatKind.Linkshell8)
+            return 19 + (kind - ChatKind.Linkshell1);
+        if (kind == ChatKind.CrossLinkshell1)
+            return 9;
+        if (kind >= ChatKind.CrossLinkshell2 && kind <= ChatKind.CrossLinkshell8)
+            return 10 + (kind - ChatKind.CrossLinkshell2);
+
+        return kind switch
+        {
+            ChatKind.Say => 1,
+            ChatKind.Party => 2,
+            ChatKind.Alliance => 3,
+            ChatKind.Yell => 4,
+            ChatKind.Shout => 5,
+            ChatKind.FreeCompany => 6,
+            ChatKind.PvpTeam => 7,
+            ChatKind.NoviceNetwork => 8,
+            _ => -1,
+        };
+    }
+
+    /// <summary>Numéro de la linkshell (à partir de 0) pour ce canal. 0 pour les autres canaux.</summary>
+    public static uint LinkshellIndex(ChatKind kind)
+    {
+        var channel = ToGameChannel(kind);
+        return channel switch
+        {
+            >= 9 and <= 16 => (uint)(channel - 9),
+            >= 19 and <= 26 => (uint)(channel - 19),
+            _ => 0u,
+        };
+    }
+
+    /// <summary>Commande affichée pour ce canal dans les menus, ou vide s'il n'y en a pas.</summary>
     public static string Command(ChatKind kind)
     {
+        if (GameShortcuts.TryGetValue(kind, out var shortcut))
+            return shortcut;
+
         if (kind >= ChatKind.Linkshell1 && kind <= ChatKind.Linkshell8)
             return $"/l{(int)kind - (int)ChatKind.Linkshell1 + 1}";
         if (kind == ChatKind.CrossLinkshell1)

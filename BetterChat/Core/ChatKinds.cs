@@ -132,9 +132,11 @@ public static class ChatKinds
     private const uint Purple = 0xC6A6FFFF;
     private const uint GmColor = 0xFFD24DFF;
 
-    public static readonly IReadOnlyList<ChatKindInfo> All = BuildAll();
+    private static readonly List<ChatKindInfo> Entries = BuildAll();
 
-    private static readonly Dictionary<ChatKind, ChatKindInfo> ByKind = All.ToDictionary(i => i.Kind);
+    public static IReadOnlyList<ChatKindInfo> All => Entries;
+
+    private static readonly Dictionary<ChatKind, ChatKindInfo> ByKind = Entries.ToDictionary(i => i.Kind);
 
     private static readonly ChatKindInfo Unknown = new(ChatKind.Other, "Autres messages", "Autre", ChatSection.Announcements, Grey, false);
 
@@ -234,6 +236,18 @@ public static class ChatKinds
         ChatSection.GameMasters => "Maîtres de jeu",
         _ => section.ToString(),
     };
+
+    /// <summary>Remplace le nom d'un canal par celui du jeu, dans la langue du joueur.</summary>
+    public static void Rename(ChatKind kind, string label)
+    {
+        var index = Entries.FindIndex(i => i.Kind == kind);
+        if (index < 0 || label.Length == 0)
+            return;
+
+        var renamed = Entries[index] with { Label = label, Tag = label };
+        Entries[index] = renamed;
+        ByKind[kind] = renamed;
+    }
 
     public static ChatKindInfo Info(ChatKind kind) => ByKind.TryGetValue(kind, out var info) ? info : Unknown;
 

@@ -12,6 +12,11 @@ var tests = new (string Name, Action Run)[]
     ("Canaux : numéro du jeu vers type de message", Tests.GameChannelMapping),
     ("Canaux : chaque canal a sa commande", Tests.ChannelCommands),
     ("Canaux : préfixe tapé reconnu", Tests.TypedPrefix),
+    ("Canaux : retour vers le numéro du jeu", Tests.ToGameChannelRoundTrip),
+    ("Canaux : les commandes du jeu remplacent celles par défaut", Tests.GameCommandsReplaceDefaults),
+    ("Pastille : un seul chiffre donne un rond, centré", Tests.BadgeSingleDigit),
+    ("Pastille : chiffres réguliers malgré des largeurs différentes", Tests.BadgeDigitsAreEven),
+    ("Pastille : le dessin est centré dans la largeur", Tests.BadgeInkIsCentered),
     ("Onglets : le général ne contient pas le combat", Tests.GeneralHasNoBattle),
     ("Onglets : filtre du combat par origine", Tests.BattleFilterBySource),
     ("Vue : filtre de l'onglet et nouveaux messages", Tests.FeedFiltersAndAppends),
@@ -152,6 +157,75 @@ internal static class Tests
         Same(ChatKind.TellOutgoing, ChatChannels.FromTypedPrefix("/tell Jean Dupont salut"), "tell");
         Same(null, ChatChannels.FromTypedPrefix("bonjour"), "message normal");
         Same(null, ChatChannels.FromTypedPrefix("/wave"), "autre commande");
+    }
+
+    public static void ToGameChannelRoundTrip()
+    {
+        foreach (var kind in new[] { ChatKind.Say, ChatKind.Yell, ChatKind.Shout, ChatKind.Party, ChatKind.Alliance, ChatKind.FreeCompany, ChatKind.PvpTeam, ChatKind.NoviceNetwork })
+            Same(kind, ChatChannels.FromGameChannel(ChatChannels.ToGameChannel(kind)), kind.ToString());
+
+        for (var i = 1; i <= 8; i++)
+        {
+            Same(ChatKinds.Linkshell(i), ChatChannels.FromGameChannel(ChatChannels.ToGameChannel(ChatKinds.Linkshell(i))), $"LS{i}");
+            Same(ChatKinds.CrossLinkshell(i), ChatChannels.FromGameChannel(ChatChannels.ToGameChannel(ChatKinds.CrossLinkshell(i))), $"CW{i}");
+            Same((uint)(i - 1), ChatChannels.LinkshellIndex(ChatKinds.Linkshell(i)), $"index LS{i}");
+            Same((uint)(i - 1), ChatChannels.LinkshellIndex(ChatKinds.CrossLinkshell(i)), $"index CW{i}");
+        }
+
+        Same(5, ChatChannels.ToGameChannel(ChatKind.Shout), "hurler");
+        Same(-1, ChatChannels.ToGameChannel(ChatKind.Damage), "pas un canal");
+        Same(-1, ChatChannels.ToGameChannel(ChatKind.TellOutgoing), "message privé : il faut un destinataire");
+    }
+
+    public static void GameCommandsReplaceDefaults()
+    {
+        ChatChannels.SetCommands(ChatKind.Shout, new[] { "/cr", "/crier" });
+        Same(null, ChatChannels.FromTypedPrefix("/sh bonjour"), "l'ancienne commande n'est plus un canal");
+        Same(ChatKind.Shout, ChatChannels.FromTypedPrefix("/crier bonjour"), "nouvelle commande");
+        Same("/cr", ChatChannels.Command(ChatKind.Shout), "affichée dans le menu");
+
+        ChatChannels.SetCommands(ChatKind.Yell, Array.Empty<string>());
+        Same(ChatKind.Yell, ChatChannels.FromTypedPrefix("/y salut"), "une liste vide ne retire rien");
+
+        ChatChannels.SetCommands(ChatKind.Shout, new[] { "/sh", "/shout" });
+    }
+
+    // ---------------------------------------------------------------- Pastilles
+
+    // Comme dans la police : largeurs différentes, et un peu de vide à gauche.
+    private static readonly GlyphBox NarrowOne = new(2f, 5f);
+    private static readonly GlyphBox WideTwo = new(1f, 8f);
+
+    public static void BadgeSingleDigit()
+    {
+        var badge = BadgeLayout.Compute(new[] { WideTwo }, 7f, 1f, 4f, 15f);
+        Same(15f, badge.Width, "aussi large que haute : un rond");
+        Same(4.5f, badge.InkMiddle - badge.PenX[0], "milieu du dessin");
+    }
+
+    public static void BadgeDigitsAreEven()
+    {
+        var badge = BadgeLayout.Compute(new[] { NarrowOne, NarrowOne, WideTwo }, 7f, 1f, 4f, 15f);
+
+        // Le milieu du dessin de chaque chiffre : l'écart doit être le même d'un chiffre à l'autre.
+        var first = badge.PenX[0] + (NarrowOne.Left + NarrowOne.Right) / 2f;
+        var second = badge.PenX[1] + (NarrowOne.Left + NarrowOne.Right) / 2f;
+        var third = badge.PenX[2] + (WideTwo.Left + WideTwo.Right) / 2f;
+        Same(8f, second - first, "écart entre le premier et le deuxième");
+        Check(Math.Abs(third - second - 8f) <= 0.5f, $"écart entre le deuxième et le troisième : {third - second}");
+
+        foreach (var pen in badge.PenX)
+            Same(MathF.Round(pen), pen, "position sur un pixel entier");
+    }
+
+    public static void BadgeInkIsCentered()
+    {
+        var badge = BadgeLayout.Compute(new[] { NarrowOne, WideTwo }, 7f, 1f, 4f, 15f);
+        var inkLeft = badge.PenX[0] + NarrowOne.Left;
+        var inkRight = badge.PenX[1] + WideTwo.Right;
+
+        Same((inkLeft + inkRight) / 2f, badge.InkMiddle, "milieu du dessin");
+        Same(inkRight - inkLeft + 8f, badge.Width, "même marge de chaque côté");
     }
 
     // ---------------------------------------------------------------- Onglets et vues
