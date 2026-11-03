@@ -143,9 +143,26 @@ public sealed partial class ChatWindow
         drawList.PopClipRect();
 
         if (hovered)
-            ImGui.SetTooltip($"{label}\nClic : changer de canal. Tab dans la saisie : canal suivant.");
+            DrawChannelTooltip(min, label, color);
 
         return size.X;
+    }
+
+    /// <summary>Infobulle posée au-dessus de la pastille, sans la cacher : elle ne suit pas la souris.</summary>
+    private static void DrawChannelTooltip(Vector2 pillMin, string label, Vector4 color)
+    {
+        ImGui.SetNextWindowPos(pillMin - new Vector2(0f, 6f * S), ImGuiCond.Always, new Vector2(0f, 1f));
+        using var tooltip = ImRaii.Tooltip();
+
+        var start = ImGui.GetCursorScreenPos();
+        var dotRadius = 3.5f * S;
+        ImGui.GetWindowDrawList().AddCircleFilled(start + new Vector2(dotRadius, ImGui.GetTextLineHeight() / 2f), dotRadius, Col(color));
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + dotRadius * 2f + 6f * S);
+        ImGui.TextColored(color, label);
+
+        ImGui.Dummy(new Vector2(0f, 2f * S));
+        ImGui.TextColored(TextDim, "Clic : changer de canal");
+        ImGui.TextColored(TextDim, "Tab dans la saisie : canal suivant");
     }
 
     private void DrawChannelMenu()

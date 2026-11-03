@@ -125,6 +125,9 @@ public sealed partial class ChatWindow : Window, IDisposable
         if (searchOpen)
             plugin.ActiveFeed.SetSearch(searchText);
 
+        // La fenêtre n'a pas de marges, mais ses infobulles et ses menus en ont besoin.
+        using var popupPadding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(10f, 8f) * S);
+
         var font = ChatFont();
         using (font != null ? font.Push() : null)
         {
