@@ -67,7 +67,7 @@ public sealed partial class ChatWindow
         lineHeight = ImGui.GetTextLineHeight();
 
         var scrollbar = ImGui.GetStyle().ScrollbarSize;
-        textLeft = 10f * S;
+        textLeft = EdgeMargin * S;
         textWidth = MathF.Max(size.X - textLeft * 2f - scrollbar, 40f);
 
         PrepareStack(feed);
@@ -299,7 +299,7 @@ public sealed partial class ChatWindow
             var pillMax = new Vector2(x + tagW + 10f * S, pos.Y + lineHeight - 1f * S);
             drawList.AddRectFilled(pillMin, pillMax, Col(channel with { W = 0.14f * TextAlpha }), lineHeight / 2f);
             DrawOutlinedText(drawList, new Vector2(x + 5f * S, pos.Y), channel with { W = TextAlpha }, tag);
-            x = pillMax.X + 6f * S;
+            x = pillMax.X + 8f * S;
         }
 
         if (Cfg.ShowTimestamps)

@@ -9,6 +9,10 @@ namespace BetterChat.Windows;
 /// <summary>La barre d'onglets et la barre de recherche.</summary>
 public sealed partial class ChatWindow
 {
+    private const float TabPadding = EdgeMargin;
+    private const float BadgePadding = 5f;
+    private const float BadgeGap = 6f;
+
     private int menuTab = -1;
     private bool searchOpen;
     private bool focusSearch;
@@ -24,9 +28,10 @@ public sealed partial class ChatWindow
         var drawList = ImGui.GetWindowDrawList();
         var origin = ImGui.GetWindowPos();
         var iconSize = height - 6f * S;
-        var iconsW = (iconSize + 2f * S) * 2f + 6f * S;
-        var pad = 8f * S;
-        var available = size.X - iconsW - pad;
+        var iconGap = 2f * S;
+        var settingsX = RightButtonX(size.X, FontAwesomeIcon.Cog, iconSize);
+        var searchX = settingsX - iconSize - iconGap;
+        var available = searchX - 4f * S;
 
         // Si les onglets ne tiennent pas, ils partagent la place et leur nom est coupé.
         var count = plugin.Feeds.Count;
@@ -39,7 +44,7 @@ public sealed partial class ChatWindow
         }
 
         var shrink = total > available ? available / total : 1f;
-        var x = pad;
+        var x = 0f; // chaque onglet a sa marge intérieure : le texte du premier s'aligne sur les messages
         var activeIndex = Math.Clamp(Cfg.ActiveTab, 0, count - 1);
 
         for (var i = 0; i < count; i++)
@@ -56,18 +61,18 @@ public sealed partial class ChatWindow
         // Soulignement de l'onglet actif et ligne sous la barre.
         drawList.AddLine(origin + new Vector2(0, height), origin + new Vector2(size.X, height), Col(Line));
         var lineTop = origin.Y + height - 2f * S;
-        drawList.AddRectFilled(new Vector2(origin.X + underlineX + 6f * S, lineTop),
-                               new Vector2(origin.X + underlineX + underlineW - 6f * S, origin.Y + height),
+        drawList.AddRectFilled(new Vector2(origin.X + underlineX + TabPadding * S, lineTop),
+                               new Vector2(origin.X + underlineX + underlineW - TabPadding * S, origin.Y + height),
                                Col(Accent), 2f * S);
 
         DrawTabMenu();
 
         // Boutons à droite.
-        ImGui.SetCursorPos(new Vector2(size.X - (iconSize + 2f * S) * 2f - 4f * S, 3f * S));
+        ImGui.SetCursorPos(new Vector2(searchX, 3f * S));
         if (IconButton("##search", FontAwesomeIcon.Search, iconSize, "Rechercher dans cet onglet (Ctrl + F)", searchOpen))
             ToggleSearch();
 
-        ImGui.SameLine(0, 2f * S);
+        ImGui.SetCursorPos(new Vector2(settingsX, 3f * S));
         if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize, "Réglages\nClic droit sur un onglet : ses options"))
             plugin.ToggleConfigUi();
 
@@ -77,10 +82,10 @@ public sealed partial class ChatWindow
 
     private float TabWidth(ChatFeed feed)
     {
-        var width = ImGui.CalcTextSize(feed.Settings.Name).X + 20f * S;
+        var width = ImGui.CalcTextSize(feed.Settings.Name).X + TabPadding * 2f * S;
         var badge = BadgeText(feed);
         if (badge != null)
-            width += ImGui.CalcTextSize(badge).X + 14f * S;
+            width += ImGui.CalcTextSize(badge).X + (BadgePadding * 2f + BadgeGap) * S;
         return width;
     }
 
@@ -118,25 +123,27 @@ public sealed partial class ChatWindow
         }
 
         var badge = BadgeText(feed);
-        var badgeW = badge != null ? ImGui.CalcTextSize(badge).X + 10f * S : 0f;
+        var badgeW = badge != null ? ImGui.CalcTextSize(badge).X + BadgePadding * 2f * S : 0f;
         var textY = min.Y + (size.Y - ImGui.GetTextLineHeight()) / 2f;
-        var textX = min.X + 10f * S;
-        var textEnd = max.X - 4f * S - (badge != null ? badgeW + 4f * S : 0f);
+        var textX = min.X + TabPadding * S;
+        var textEnd = max.X - TabPadding * S - (badge != null ? badgeW + BadgeGap * S : 0f);
 
-        drawList.PushClipRect(new Vector2(textX, min.Y), new Vector2(textEnd, max.Y), true);
+        // Un peu plus large que le texte, pour ne pas couper son contour.
+        var outlineRoom = 2f * S;
+        drawList.PushClipRect(new Vector2(textX - outlineRoom, min.Y), new Vector2(textEnd + outlineRoom, max.Y), true);
         DrawOutlinedText(drawList, new Vector2(textX, textY), active || hovered ? TextMain : TextDim, feed.Settings.Name);
         drawList.PopClipRect();
 
         if (badge != null)
         {
             var color = feed.UnreadMentions > 0 ? Danger : Accent;
-            var badgeMin = new Vector2(textEnd + 4f * S, min.Y + (size.Y - ImGui.GetTextLineHeight()) / 2f);
+            var badgeMin = new Vector2(textEnd + BadgeGap * S, textY);
             var badgeMax = badgeMin + new Vector2(badgeW, ImGui.GetTextLineHeight());
             drawList.AddRectFilled(badgeMin, badgeMax, Col(color with { W = 0.85f }), ImGui.GetTextLineHeight() / 2f);
-            drawList.AddText(badgeMin + new Vector2(5f * S, 0f), Col(new Vector4(0.05f, 0.06f, 0.09f, 1f)), badge);
+            drawList.AddText(badgeMin + new Vector2(BadgePadding * S, 0f), Col(new Vector4(0.05f, 0.06f, 0.09f, 1f)), badge);
         }
 
-        if (hovered && size.X < ImGui.CalcTextSize(feed.Settings.Name).X + 20f * S)
+        if (hovered && size.X < ImGui.CalcTextSize(feed.Settings.Name).X + TabPadding * 2f * S)
             ImGui.SetTooltip(feed.Settings.Name);
     }
 
@@ -202,11 +209,13 @@ public sealed partial class ChatWindow
 
     private void DrawSearchBar(Vector2 size, float top, float height)
     {
-        var pad = 8f * S;
+        var margin = EdgeMargin * S;
+        var gap = 6f * S;
         var close = height - 8f * S;
+        var closeX = RightButtonX(size.X, FontAwesomeIcon.Times, close);
 
-        ImGui.SetCursorPos(new Vector2(pad, top + (height - ImGui.GetFrameHeight()) / 2f));
-        ImGui.SetNextItemWidth(size.X - pad * 3f - close);
+        ImGui.SetCursorPos(new Vector2(margin, MathF.Round(top + (height - ImGui.GetFrameHeight()) / 2f)));
+        ImGui.SetNextItemWidth(closeX - gap - margin);
         if (focusSearch)
         {
             ImGui.SetKeyboardFocusHere();
@@ -222,8 +231,7 @@ public sealed partial class ChatWindow
         // Échap quitte d'abord la zone de texte : c'est à ce moment-là qu'on ferme la recherche.
         var escape = ImGui.IsItemDeactivated() && ImGui.IsKeyPressed(ImGuiKey.Escape, false);
 
-        ImGui.SameLine(0, pad);
-        ImGui.SetCursorPosY(top + 4f * S);
+        ImGui.SetCursorPos(new Vector2(closeX, top + 4f * S));
         if (IconButton("##closeSearch", FontAwesomeIcon.Times, close, "Fermer la recherche") || escape)
             ToggleSearch();
     }

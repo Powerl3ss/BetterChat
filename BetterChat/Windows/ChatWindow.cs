@@ -29,6 +29,9 @@ public sealed partial class ChatWindow : Window, IDisposable
     private static readonly Vector4 Danger = new(1f, 0.47f, 0.47f, 1f);
     private static readonly Vector4 PopupBg = new(0.09f, 0.10f, 0.13f, 0.98f);
 
+    // Marge commune à gauche et à droite : onglets, messages, saisie et icônes s'alignent dessus.
+    private const float EdgeMargin = 10f;
+
     private readonly Plugin plugin;
     private Configuration Cfg => plugin.Configuration;
     private Vector4 Accent => Cfg.AccentColor with { W = 1f };
@@ -201,6 +204,16 @@ public sealed partial class ChatWindow : Window, IDisposable
     // ------------------------------------------------------------ Petits dessins
 
     private static uint Col(Vector4 color) => ImGui.GetColorU32(color);
+
+    /// <summary>
+    /// Position du bouton le plus à droite : c'est le dessin de l'icône qui s'aligne sur la marge,
+    /// le bouton autour la dépasse légèrement (il n'est visible qu'au survol).
+    /// </summary>
+    private static float RightButtonX(float windowWidth, FontAwesomeIcon icon, float buttonSize)
+    {
+        var inset = (buttonSize - ConfigWindow.IconSize(icon).X) / 2f;
+        return windowWidth - EdgeMargin * S + inset - buttonSize;
+    }
 
     /// <summary>Icône avec le même contour que le texte : elle reste lisible sans fond.</summary>
     private void DrawOutlinedIcon(FontAwesomeIcon icon, Vector2 min, Vector2 max, Vector4 color)

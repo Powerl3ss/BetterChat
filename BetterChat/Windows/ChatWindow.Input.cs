@@ -88,7 +88,7 @@ public sealed partial class ChatWindow
 
     private void DrawInputBar(Vector2 size, float height)
     {
-        var pad = 8f * S;
+        var pad = EdgeMargin * S;
         var drawList = ImGui.GetWindowDrawList();
         var origin = ImGui.GetWindowPos();
         drawList.AddLine(origin + new Vector2(0, size.Y - height), origin + new Vector2(size.X, size.Y - height), Col(Line));
@@ -98,7 +98,7 @@ public sealed partial class ChatWindow
         var label = ChannelText(channel, typedChannel != null);
 
         var rowH = ImGui.GetFrameHeight();
-        var rowY = size.Y - height + (height - rowH) / 2f;
+        var rowY = MathF.Round(size.Y - height + (height - rowH) / 2f); // sur un pixel entier : pastille et saisie restent nettes
 
         ImGui.SetCursorPos(new Vector2(pad, rowY));
         var pillW = DrawChannelPill(channel, label, rowH);
@@ -126,7 +126,7 @@ public sealed partial class ChatWindow
         var color = plugin.Colors.Of(channel);
         var maxLabel = 170f * S;
         var labelW = MathF.Min(Measure(label), maxLabel);
-        var size = new Vector2(labelW + 26f * S, height);
+        var size = new Vector2(labelW + 28f * S, height); // 8 de chaque côté, 12 entre le point et le texte
 
         var min = ImGui.GetCursorScreenPos();
         channelPillMin = min;
@@ -140,9 +140,9 @@ public sealed partial class ChatWindow
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
         drawList.AddRectFilled(min, min + size, Col(color with { W = hovered ? 0.26f : 0.16f }), 8f * S);
-        drawList.AddCircleFilled(min + new Vector2(10f * S, height / 2f), 3.5f * S, Col(color));
+        drawList.AddCircleFilled(min + new Vector2(11.5f * S, height / 2f), 3.5f * S, Col(color));
 
-        var textPos = min + new Vector2(18f * S, (height - ImGui.GetTextLineHeight()) / 2f);
+        var textPos = min + new Vector2(20f * S, (height - ImGui.GetTextLineHeight()) / 2f);
         drawList.PushClipRect(min, min + new Vector2(size.X - 4f * S, height), true);
         DrawOutlinedText(drawList, textPos, color, label);
         drawList.PopClipRect();
@@ -350,7 +350,7 @@ public sealed partial class ChatWindow
         var min = ImGui.GetItemRectMin();
         var max = ImGui.GetItemRectMax();
         var size = ImGui.CalcTextSize(text);
-        var pos = new Vector2(max.X - size.X - 6f * S, min.Y - size.Y - 6f * S);
+        var pos = new Vector2(max.X - size.X - 4f * S, min.Y - size.Y - 6f * S); // le fond s'aligne sur le bord de la saisie
         var drawList = ImGui.GetWindowDrawList();
         drawList.AddRectFilled(pos - new Vector2(4f, 2f) * S, pos + size + new Vector2(4f, 2f) * S, Col(PopupBg), 5f * S);
         drawList.AddText(pos, Col(color), text);
@@ -393,7 +393,7 @@ public sealed partial class ChatWindow
         var min = ImGui.GetItemRectMin();
         var lineH = ImGui.GetTextLineHeightWithSpacing();
         var height = lineH * (suggestions.Count + 1) + ImGui.GetStyle().WindowPadding.Y * 2f;
-        ImGui.SetNextWindowPos(new Vector2(min.X, min.Y - height - 4f * S));
+        ImGui.SetNextWindowPos(new Vector2(min.X, min.Y - height - 6f * S));
 
         using var tooltip = ImRaii.Tooltip();
 

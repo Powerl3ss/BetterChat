@@ -60,7 +60,7 @@ public sealed partial class ConfigWindow
 
     private static float TextWidth(string text) => ImGui.CalcTextSize(text).X;
 
-    private static Vector2 IconSize(FontAwesomeIcon icon)
+    internal static Vector2 IconSize(FontAwesomeIcon icon)
     {
         using (ImRaii.PushFont(UiBuilder.IconFont))
             return ImGui.CalcTextSize(icon.ToIconString());
