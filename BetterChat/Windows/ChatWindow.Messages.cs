@@ -711,9 +711,6 @@ public sealed partial class ChatWindow
 
         using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(jumpReveal, 0.001f) * ImGui.GetStyle().Alpha))
         {
-            // Ombre douce : le bouton se détache des messages qu'il recouvre.
-            drawList.AddRectFilled(min + new Vector2(0f, 2f * S), max + new Vector2(0f, 3f * S), Col(new Vector4(0f, 0f, 0f, 0.28f)), rounding);
-
             var fill = held ? new Vector4(0.20f, 0.22f, 0.29f, 0.98f)
                 : hovered ? new Vector4(0.16f, 0.18f, 0.24f, 0.98f)
                 : new Vector4(0.10f, 0.11f, 0.15f, 0.96f);
