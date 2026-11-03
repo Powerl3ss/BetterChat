@@ -10,9 +10,9 @@ namespace BetterChat.Windows;
 public sealed partial class ChatWindow
 {
     private const float TabPadding = EdgeMargin;
-    private const float BadgePadding = 6f;
-    private const float BadgeVerticalPadding = 3f;
     private const float BadgeGap = 6f;
+    private const float BadgeDotSize = 6f;
+    private const float BadgeDotGap = 4f;
 
     private int menuTab = -1;
     private bool searchOpen;
@@ -127,9 +127,7 @@ public sealed partial class ChatWindow
         for (var i = 0; i < text.Length; i++)
             boxes[i] = Box(text[i]);
 
-        // Toujours un peu plus large que haute, même avec un seul chiffre : une pilule, pas un rond.
-        var minWidth = MathF.Round(BadgeHeight() * 1.3f);
-        return BadgeLayout.Compute(boxes, MathF.Ceiling(cell), MathF.Round(1f * S), MathF.Round(BadgePadding * S), minWidth);
+        return BadgeLayout.Compute(boxes, MathF.Ceiling(cell), MathF.Round(1f * S), 0f, 0f);
     }
 
     /// <summary>Haut et bas réels des chiffres, depuis la position d'écriture. La hauteur de la pastille en découle.</summary>
@@ -144,36 +142,34 @@ public sealed partial class ChatWindow
         return (glyph->Y0 * scale, glyph->Y1 * scale);
     }
 
-    private static float BadgeHeight()
-    {
-        var (top, bottom) = DigitInk();
-        return MathF.Round(bottom - top + BadgeVerticalPadding * 2f * S);
-    }
-
-    private static float BadgeWidth(string text) => MeasureBadge(text).Width;
+    private static float BadgeWidth(string text) => (BadgeDotSize + BadgeDotGap) * S + MeasureBadge(text).Width;
 
     /// <summary>
-    /// Une pilule pleine, sans bordure, avec les chiffres à la taille du nom de l'onglet pour rester bien lisibles.
-    /// Gris ardoise d'ordinaire pour ne pas voler la vedette au nom, rouge quand on te parle directement.
+    /// Un petit point suivi du nombre, sans fond : discret, et il se lit sur n'importe quel décor.
+    /// Bleu d'ordinaire, rouge quand on te parle directement.
     /// </summary>
     private void DrawBadge(string text, float left, float centerY, bool urgent)
     {
         var drawList = ImGui.GetWindowDrawList();
         var layout = MeasureBadge(text);
         var (top, bottom) = DigitInk();
-        var height = BadgeHeight();
 
-        // Les chiffres d'abord, sur des pixels entiers : la pastille se centre ensuite sur leur position réelle.
-        var originX = MathF.Round(left + layout.Width / 2f - layout.InkMiddle);
+        var dotColor = urgent ? new Vector4(0.91f, 0.29f, 0.29f, 1f) : new Vector4(0.30f, 0.65f, 1f, 1f);
+        var digitColor = urgent ? new Vector4(1f, 0.47f, 0.47f, 1f) : new Vector4(0.55f, 0.76f, 1f, 1f);
+
+        // Les chiffres sur des pixels entiers, le point centré en hauteur sur leur dessin réel.
+        var inkLeft = left + (BadgeDotSize + BadgeDotGap) * S;
+        var originX = MathF.Round(inkLeft + layout.Width / 2f - layout.InkMiddle);
         var originY = MathF.Round(centerY - (top + bottom) / 2f);
-        var center = new Vector2(originX + layout.InkMiddle, originY + (top + bottom) / 2f);
-        var half = new Vector2(layout.Width, height) / 2f;
 
-        var fill = urgent ? new Vector4(0.91f, 0.29f, 0.29f, 1f) : new Vector4(0.28f, 0.31f, 0.37f, 0.92f);
-        drawList.AddRectFilled(center - half, center + half, Col(fill), height / 2f);
+        var radius = BadgeDotSize / 2f * S;
+        var dotCenter = new Vector2(left + radius, originY + (top + bottom) / 2f);
+        if (Cfg.TextOutline && Cfg.OutlineStrength > 0f)
+            drawList.AddCircleFilled(dotCenter, radius + MathF.Max(1f, S), Col(new Vector4(0f, 0f, 0f, 0.6f * Math.Clamp(Cfg.OutlineStrength, 0f, 1f))));
+        drawList.AddCircleFilled(dotCenter, radius, Col(dotColor));
 
         for (var i = 0; i < text.Length; i++)
-            drawList.AddText(new Vector2(originX + layout.PenX[i], originY), Col(new Vector4(1f, 1f, 1f, 1f)), text[i].ToString());
+            DrawOutlinedText(drawList, new Vector2(originX + layout.PenX[i], originY), digitColor, text[i].ToString());
     }
 
     private void DrawTab(int index, Vector2 pos, Vector2 size, bool active)
