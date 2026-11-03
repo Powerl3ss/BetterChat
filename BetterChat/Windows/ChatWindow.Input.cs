@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using BetterChat.Chat;
 using BetterChat.Core;
@@ -33,6 +34,8 @@ public sealed partial class ChatWindow
     private int selectedSuggestion = -1;
     private string suggestionsFor = string.Empty;
     private List<ChannelChoice>? channelMenu;
+    private Vector2 channelPillMin;
+    private float channelPillHeight;
 
     private string? inputError;
     private double inputErrorUntil;
@@ -126,6 +129,8 @@ public sealed partial class ChatWindow
         var size = new Vector2(labelW + 26f * S, height);
 
         var min = ImGui.GetCursorScreenPos();
+        channelPillMin = min;
+        channelPillHeight = height;
         if (ImGui.InvisibleButton("##channel", size))
         {
             channelMenu = GameChat.AvailableChannels();
@@ -165,8 +170,23 @@ public sealed partial class ChatWindow
         ImGui.TextColored(TextDim, "Tab dans la saisie : canal suivant");
     }
 
+    /// <summary>Le menu s'ouvre au-dessus de la pastille. S'il n'a pas la place (chat en haut de l'écran), il passe dessous.</summary>
+    private void PlaceChannelMenu()
+    {
+        var gap = 6f * S;
+        var rows = (channelMenu?.Count ?? 0) + plugin.RecentTells.People.Count + 2;
+        var estimatedHeight = rows * ImGui.GetFrameHeightWithSpacing();
+        var fitsAbove = channelPillMin.Y - gap - estimatedHeight >= ImGuiHelpers.MainViewport.Pos.Y;
+
+        if (fitsAbove)
+            ImGui.SetNextWindowPos(channelPillMin - new Vector2(0f, gap), ImGuiCond.Always, new Vector2(0f, 1f));
+        else
+            ImGui.SetNextWindowPos(channelPillMin + new Vector2(0f, channelPillHeight + gap), ImGuiCond.Always);
+    }
+
     private void DrawChannelMenu()
     {
+        PlaceChannelMenu();
         if (!ImGui.BeginPopup("##channelMenu"))
             return;
 
