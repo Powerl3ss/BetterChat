@@ -229,6 +229,21 @@ public sealed partial class ChatWindow : Window, IDisposable
         ImGui.GetWindowDrawList().AddRectFilled(min, max, Col(new Vector4(0f, 0f, 0f, alpha)), 7f * S);
     }
 
+    /// <summary>La même taille pour tous les boutons à icône du chat, sur un nombre entier de pixels.</summary>
+    private static float IconButtonSize => MathF.Round(ImGui.GetTextLineHeight() + 8f * S);
+
+    /// <summary>
+    /// La croix de la police est nettement plus petite que les autres icônes : elle est tracée à la main,
+    /// à une taille accordée à la leur et exactement au centre.
+    /// </summary>
+    private static void DrawCloseCross(ImDrawListPtr drawList, Vector2 center, Vector4 color)
+    {
+        var reach = ConfigWindow.IconGlyphSize(FontAwesomeIcon.Cog).Y / 2f * 0.72f;
+        var thickness = MathF.Max(1.5f, 2f * S);
+        drawList.AddLine(center - new Vector2(reach, reach), center + new Vector2(reach, reach), Col(color), thickness);
+        drawList.AddLine(center + new Vector2(-reach, reach), center + new Vector2(reach, -reach), Col(color), thickness);
+    }
+
     private bool IconButton(string id, FontAwesomeIcon icon, float size, string? tooltip, bool active = false)
     {
         var min = ImGui.GetCursorScreenPos();
@@ -237,7 +252,10 @@ public sealed partial class ChatWindow : Window, IDisposable
         var drawList = ImGui.GetWindowDrawList();
 
         // Le dessin de l'icône est calé sur un pixel entier : les fonds se centrent sur lui, pas sur le bouton.
-        var center = ConfigWindow.IconVisualCenter(icon, min, min + new Vector2(size, size));
+        var isCross = icon == FontAwesomeIcon.Times;
+        var center = isCross
+            ? min + new Vector2(size, size) / 2f
+            : ConfigWindow.IconVisualCenter(icon, min, min + new Vector2(size, size));
         var half = new Vector2(size / 2f, size / 2f);
 
         DrawIconBackdrop(center - half, center + half);
@@ -249,7 +267,11 @@ public sealed partial class ChatWindow : Window, IDisposable
 
         // Au repos, un gris plus clair quand le contraste est activé : il se détache mieux du décor.
         var idle = Cfg.TextOutline ? Vector4.Lerp(TextDim, TextMain, 0.6f) : TextDim;
-        ConfigWindow.DrawIconCentered(icon, min, min + new Vector2(size, size), active ? Accent : hovered ? TextMain : idle);
+        var color = active ? Accent : hovered ? TextMain : idle;
+        if (isCross)
+            DrawCloseCross(drawList, center, color);
+        else
+            ConfigWindow.DrawIconCentered(icon, min, min + new Vector2(size, size), color);
 
         if (tooltip != null && hovered)
             ImGui.SetTooltip(tooltip);

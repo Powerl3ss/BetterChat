@@ -27,7 +27,8 @@ public sealed partial class ChatWindow
     {
         var drawList = ImGui.GetWindowDrawList();
         var origin = ImGui.GetWindowPos();
-        var iconSize = height - 6f * S;
+        var iconSize = IconButtonSize;
+        var iconY = MathF.Round((height - iconSize) / 2f);
         var iconGap = 2f * S;
         var settingsX = RightButtonX(size.X, FontAwesomeIcon.Cog, iconSize);
         var searchX = settingsX - iconSize - iconGap;
@@ -68,11 +69,11 @@ public sealed partial class ChatWindow
         DrawTabMenu();
 
         // Boutons à droite.
-        ImGui.SetCursorPos(new Vector2(searchX, 3f * S));
+        ImGui.SetCursorPos(new Vector2(searchX, iconY));
         if (IconButton("##search", FontAwesomeIcon.Search, iconSize, "Rechercher dans cet onglet (Ctrl + F)", searchOpen))
             ToggleSearch();
 
-        ImGui.SetCursorPos(new Vector2(settingsX, 3f * S));
+        ImGui.SetCursorPos(new Vector2(settingsX, iconY));
         if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize, "Réglages\nClic droit sur un onglet : ses options"))
             plugin.ToggleConfigUi();
 
@@ -211,8 +212,8 @@ public sealed partial class ChatWindow
     {
         var margin = EdgeMargin * S;
         var gap = 6f * S;
-        var close = height - 8f * S;
-        var closeX = RightButtonX(size.X, FontAwesomeIcon.Times, close);
+        var close = IconButtonSize;
+        var closeX = RightButtonX(size.X, FontAwesomeIcon.Cog, close); // dans la même colonne que l'engrenage
 
         ImGui.SetCursorPos(new Vector2(margin, MathF.Round(top + (height - ImGui.GetFrameHeight()) / 2f)));
         ImGui.SetNextItemWidth(closeX - gap - margin);
@@ -231,7 +232,7 @@ public sealed partial class ChatWindow
         // Échap quitte d'abord la zone de texte : c'est à ce moment-là qu'on ferme la recherche.
         var escape = ImGui.IsItemDeactivated() && ImGui.IsKeyPressed(ImGuiKey.Escape, false);
 
-        ImGui.SetCursorPos(new Vector2(closeX, top + 4f * S));
+        ImGui.SetCursorPos(new Vector2(closeX, MathF.Round(top + (height - close) / 2f)));
         if (IconButton("##closeSearch", FontAwesomeIcon.Times, close, "Fermer la recherche") || escape)
             ToggleSearch();
     }

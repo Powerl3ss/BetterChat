@@ -103,6 +103,20 @@ public sealed partial class ConfigWindow
         }
     }
 
+    /// <summary>Taille réelle du dessin de l'icône, sans les marges de sa police.</summary>
+    internal static unsafe Vector2 IconGlyphSize(FontAwesomeIcon icon)
+    {
+        using (ImRaii.PushFont(UiBuilder.IconFont))
+        {
+            var font = ImGui.GetFont();
+            var glyph = font.FindGlyph((char)icon);
+            if (glyph == null || font.FontSize <= 0f)
+                return ImGui.CalcTextSize(icon.ToIconString());
+
+            return new Vector2(glyph->X1 - glyph->X0, glyph->Y1 - glyph->Y0) * (ImGui.GetFontSize() / font.FontSize);
+        }
+    }
+
     /// <summary>
     /// Position d'écriture de l'icône (sur un pixel entier, pour rester nette) et milieu de son dessin par rapport à
     /// cette position. La police des icônes doit être active.
