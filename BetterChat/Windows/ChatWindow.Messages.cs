@@ -18,6 +18,7 @@ namespace BetterChat.Windows;
 public sealed partial class ChatWindow
 {
     private const float ScrollStickMargin = 4f;
+    private const int ScrollSettleFrameCount = 3;
 
     // Air entre la liste et la barre d'onglets, puis la zone de saisie.
     private const float ListPaddingTop = 8f;
@@ -50,6 +51,8 @@ public sealed partial class ChatWindow
     private int lastCountForUnseen;
     private bool scrollToBottom;
     private float previousScrollMax;
+    private float previousListHeight;
+    private int scrollSettleFrames;
 
     private ChatLink? hoveredLink;
     private ChatLink? hoveredLinkLastFrame;
@@ -79,11 +82,15 @@ public sealed partial class ChatWindow
         }
 
         // Toute la hauteur est réservée : la barre de défilement est juste, même sans tout dessiner.
-        var paddingTop = ListPaddingTop * S;
-        var origin = ImGui.GetCursorScreenPos() + new Vector2(0f, paddingTop);
         ImGui.Dummy(new Vector2(size.X - scrollbar, ContentHeight));
 
-        var scrollY = ImGui.GetScrollY();
+        // Collé en bas, la position vient directement du calcul : ImGui applique le défilement et la nouvelle hauteur
+        // de la liste avec une image de retard, ce qui faisait sautiller les messages quand elle change de taille.
+        var paddingTop = ListPaddingTop * S;
+        var scrollY = stickToBottom || scrollToBottom ? MathF.Max(ContentHeight - size.Y, 0f) : ImGui.GetScrollY();
+        var windowPos = ImGui.GetWindowPos();
+        var origin = new Vector2(windowPos.X, windowPos.Y - scrollY + paddingTop);
+
         var hoverable = ImGui.IsWindowHovered();
         hoveredLinkLastFrame = hoveredLink;
         hoveredLink = null;
@@ -557,7 +564,16 @@ public sealed partial class ChatWindow
 
         // Comparé au bas de l'image précédente : un nouveau message allonge la liste sans décoller du bas,
         // alors que la molette ou la barre de défilement, elles, font remonter.
-        if (!scrollToBottom)
+        //
+        // Pendant que la liste change de hauteur (barre de recherche, fenêtre redimensionnée), le défilement réel est en
+        // retard sur le calcul : ce n'est pas l'utilisateur qui a quitté le bas, on garde donc l'état précédent.
+        if (MathF.Abs(size.Y - previousListHeight) > 0.5f)
+            scrollSettleFrames = ScrollSettleFrameCount;
+        previousListHeight = size.Y;
+
+        if (scrollSettleFrames > 0)
+            scrollSettleFrames--;
+        else if (!scrollToBottom)
             stickToBottom = scrollY >= previousScrollMax - ScrollStickMargin * S;
         previousScrollMax = scrollMax;
 
