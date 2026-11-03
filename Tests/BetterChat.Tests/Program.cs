@@ -40,6 +40,8 @@ var tests = new (string Name, Action Run)[]
     ("Séparateurs : le repère disparaît en quittant l'onglet", Tests.NewMarkerClearsOnLeave),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
+    ("Icône : le dessin est trouvé, sans les marges ni l'ombre", Tests.IconInkFound),
+    ("Icône : image vide ou illisible, l'image entière sert", Tests.IconInkFallback),
     ("Connexion : la barre apparaît tout de suite, dans tous les onglets", Tests.SessionBarInEveryTab),
     ("Connexion : ni en haut de la liste, ni deux de suite", Tests.SessionBarNotDoubled),
     ("Connexion : pas de non-lu ni de double barre avec le repère", Tests.SessionBarIsNotUnread),
@@ -610,6 +612,30 @@ internal static class Tests
         second.Id = 42;
         Check(LineSeparators.Between(first, second, 42, Today).NewMessages, "repère");
         Check(!LineSeparators.Between(first, second, 41, Today).NewMessages, "pas ici");
+    }
+
+    private static void Pixel(byte[] image, int width, int x, int y, byte brightness, byte alpha)
+    {
+        var i = (y * width + x) * 4;
+        image[i] = image[i + 1] = image[i + 2] = brightness;
+        image[i + 3] = alpha;
+    }
+
+    public static void IconInkFound()
+    {
+        var image = new byte[10 * 10 * 4];
+        Pixel(image, 10, 2, 1, 255, 255);
+        Pixel(image, 10, 6, 4, 255, 255);
+        Pixel(image, 10, 8, 9, 0, 255); // ombre noire, opaque
+        Pixel(image, 10, 0, 0, 255, 40); // bord à peine visible
+
+        Same(new IconInk(0.2f, 0.1f, 0.7f, 0.5f), IconInk.Find(image, 10, 10), "dessin");
+    }
+
+    public static void IconInkFallback()
+    {
+        Same(IconInk.Full, IconInk.Find(new byte[4 * 4 * 4], 4, 4), "image vide");
+        Same(IconInk.Full, IconInk.Find(new byte[3], 4, 4), "image trop courte");
     }
 
     public static void SessionBarInEveryTab()

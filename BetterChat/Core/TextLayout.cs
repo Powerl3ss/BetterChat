@@ -4,6 +4,45 @@ using System.Text;
 
 namespace BetterChat.Core;
 
+/// <summary>Le dessin réel d'une icône dans son image, en fractions de l'image : (0, 0, 1, 1) pour l'image entière.</summary>
+public readonly record struct IconInk(float Left, float Top, float Right, float Bottom)
+{
+    public static readonly IconInk Full = new(0f, 0f, 1f, 1f);
+
+    private const byte MinAlpha = 128;
+    private const byte MinBrightness = 80;
+
+    /// <summary>
+    /// Cherche le dessin dans une image BGRA. Les icônes ont des marges et une ombre sombre qui varient :
+    /// seuls les pixels nets et clairs comptent, pour les centrer sur ce que l'œil voit vraiment.
+    /// </summary>
+    public static IconInk Find(ReadOnlySpan<byte> bgra, int width, int height)
+    {
+        if (width <= 0 || height <= 0 || bgra.Length < width * height * 4)
+            return Full;
+
+        int left = width, right = -1, top = height, bottom = -1;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var i = (y * width + x) * 4;
+                if (bgra[i + 3] < MinAlpha || Math.Max(bgra[i], Math.Max(bgra[i + 1], bgra[i + 2])) < MinBrightness)
+                    continue;
+
+                left = Math.Min(left, x);
+                right = Math.Max(right, x);
+                top = Math.Min(top, y);
+                bottom = Math.Max(bottom, y);
+            }
+        }
+
+        return right < 0
+            ? Full
+            : new IconInk(left / (float)width, top / (float)height, (right + 1) / (float)width, (bottom + 1) / (float)height);
+    }
+}
+
 /// <summary>Un bout de texte placé sur une ligne.</summary>
 /// <param name="SpanIndex">Le morceau d'origine (donne la couleur et le lien).</param>
 /// <param name="X">Position depuis le bord gauche de la zone de texte.</param>

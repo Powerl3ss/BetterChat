@@ -38,6 +38,7 @@ public class Configuration : IPluginConfiguration
     public Dictionary<ChatKind, Vector4> ChannelColors { get; set; } = new();
     public bool ShowSeparators { get; set; } = true;
     public bool ShowJobIcons { get; set; } = true;
+    public float JobIconPercent { get; set; } = 75f; // hauteur du dessin de l'icône, par rapport à la ligne de texte
     public Dictionary<string, Vector4> PlayerColors { get; set; } = new();
 
     // --- Saisie ---

@@ -7,6 +7,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
+using Lumina.Data.Files;
 using Lumina.Excel.Sheets;
 using BetterChat.Chat;
 using BetterChat.Core;
@@ -28,6 +29,10 @@ public sealed class MessageList
     private const float ListPaddingTop = 8f;
     private const float ListPaddingBottom = 6f;
     private const int WidthCacheLimit = 20000;
+
+    // Les icônes de job du jeu se suivent à partir de ce numéro, dans l'ordre de la feuille ClassJob.
+    private const uint JobIconBase = 62000;
+    private static readonly Dictionary<uint, IconInk> JobIconInks = new();
 
     /// <summary>Mise en page d'un message pour une largeur et une police données.</summary>
     private sealed class LineLayout
@@ -157,7 +162,8 @@ public sealed class MessageList
         // Présentation moderne : l'heure a sa colonne à gauche, et tous les textes commencent au même endroit.
         timeColumn = Cfg.Style == ChatStyle.Modern && Cfg.ShowTimestamps ? MathF.Ceiling(Measure("00:00") + 6f * S) : 0f;
 
-        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor, Cfg.ShowJobIcons, Cfg.ShowSeparators);
+        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor,
+                                   HashCode.Combine(Cfg.ShowJobIcons, Cfg.JobIconPercent), Cfg.ShowSeparators);
         var feedChanged = !ReferenceEquals(stackFeed, feed);
         var listChanged = feedChanged || stackRebuild != feed.RebuildCount;
         var rebuild = listChanged || layoutKey != key || stackMarker != feed.FirstUnreadId;
@@ -280,7 +286,7 @@ public sealed class MessageList
             if (HasJobIcon(line))
             {
                 layout.IconSpan = spans.Count;
-                var spaces = (int)MathF.Ceiling((JobIconSize + 3f * S) / MathF.Max(Measure(" "), 1f));
+                var spaces = (int)MathF.Ceiling(JobIconAdvance / MathF.Max(Measure(" "), 1f));
                 spans.Add(new ChatSpan(new string(' ', spaces)));
             }
 
@@ -432,14 +438,62 @@ public sealed class MessageList
 
     private bool HasJobIcon(ChatLine line) => Cfg.ShowJobIcons && line.AuthorJob != 0;
 
-    private float JobIconSize => MathF.Round(lineHeight);
+    // La case réservée à l'icône : les noms commencent au même endroit, quelle que soit la forme du dessin.
+    private float JobIconSize => MathF.Max(MathF.Round(lineHeight * Cfg.JobIconPercent / 100f), 1f);
 
-    private void DrawJobIcon(ImDrawListPtr drawList, uint job, Vector2 pos)
+    private float JobIconAdvance => JobIconSize + MathF.Round(4f * S);
+
+    /// <summary>
+    /// L'icône de job, à la hauteur du texte écrit en <paramref name="textPos"/>. C'est son dessin qui est placé, sans
+    /// les marges de son image : il se centre sur le texte et remplit sa case quel que soit le job.
+    /// </summary>
+    private void DrawJobIcon(ImDrawListPtr drawList, uint job, Vector2 textPos)
     {
-        // Les icônes de job du jeu se suivent à partir de 62000, dans l'ordre de la feuille ClassJob.
-        var icon = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(62000 + job));
-        if (icon.TryGetWrap(out var wrap, out _) && wrap != null)
-            drawList.AddImage(wrap.Handle, pos, pos + new Vector2(JobIconSize, JobIconSize));
+        var lookup = new GameIconLookup(JobIconBase + job);
+        var icon = Plugin.TextureProvider.GetFromGameIcon(lookup);
+        if (!icon.TryGetWrap(out var wrap, out _) || wrap == null)
+            return;
+
+        var ink = JobIconInk(job, lookup);
+        var inkW = ink.Right - ink.Left;
+        var inkH = ink.Bottom - ink.Top;
+        var slot = JobIconSize;
+
+        // Le dessin le plus long tient dans la case, l'autre côté suit pour ne pas le déformer.
+        var ratio = inkW / MathF.Max(inkH, 0.001f) * wrap.Width / MathF.Max(wrap.Height, 1f);
+        var size = ratio >= 1f
+            ? new Vector2(slot, MathF.Max(MathF.Round(slot / ratio), 1f))
+            : new Vector2(MathF.Max(MathF.Round(slot * ratio), 1f), slot);
+
+        // Même centre que les chiffres et les lettres : voir la flèche de « Revenir en bas ».
+        var (cellTop, cellBottom) = DigitInk();
+        var min = new Vector2(
+            MathF.Round(textPos.X + (slot - size.X) / 2f),
+            MathF.Ceiling(textPos.Y + (cellTop + cellBottom) / 2f - size.Y / 2f));
+
+        drawList.AddImage(wrap.Handle, min, min + size, new Vector2(ink.Left, ink.Top), new Vector2(ink.Right, ink.Bottom));
+    }
+
+    private static IconInk JobIconInk(uint job, GameIconLookup lookup)
+    {
+        if (JobIconInks.TryGetValue(job, out var known))
+            return known;
+
+        var ink = IconInk.Full;
+        try
+        {
+            var file = Plugin.DataManager.GetFile<TexFile>(Plugin.TextureProvider.GetIconPath(lookup));
+            if (file != null)
+                ink = IconInk.Find(file.ImageData, file.Header.Width, file.Header.Height);
+        }
+        catch (Exception ex)
+        {
+            // Sans cette mesure, l'icône s'affiche simplement avec ses marges.
+            Plugin.Log.Debug(ex, "Lecture de l'icône du job {Job} impossible", job);
+        }
+
+        JobIconInks[job] = ink;
+        return ink;
     }
 
     private void DrawHeader(ChatLine line, Vector2 pos, Vector4 channel, bool hoverable)
@@ -457,7 +511,7 @@ public sealed class MessageList
         if (HasJobIcon(line))
         {
             DrawJobIcon(drawList, line.AuthorJob, new Vector2(x, pos.Y));
-            x += JobIconSize + 3f * S;
+            x += JobIconAdvance;
         }
 
         foreach (var span in line.Sender)
