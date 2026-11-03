@@ -27,12 +27,6 @@ public class Configuration : IPluginConfiguration
     public bool Locked { get; set; } = false;
     public float WindowOpacity { get; set; } = 0.82f;
 
-    // --- Discrétion quand le chat ne sert pas ---
-    public bool IdleFade { get; set; } = true;
-    public int IdleSeconds { get; set; } = 12;
-    public float IdleFrameOpacity { get; set; } = 0.0f;
-    public float IdleTextOpacity { get; set; } = 0.85f;
-
     // --- Messages ---
     public ChatStyle Style { get; set; } = ChatStyle.Modern;
     public float FontSize { get; set; } = 16f;

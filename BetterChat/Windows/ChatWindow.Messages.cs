@@ -114,7 +114,7 @@ public sealed partial class ChatWindow
     {
         var text = feed.Search.Length > 0 ? "Aucun message trouvé" : "Aucun message pour l'instant";
         var textSize = ImGui.CalcTextSize(text);
-        DrawOutlinedText(ImGui.GetWindowDrawList(), ImGui.GetWindowPos() + (size - textSize) / 2f, TextDim with { W = TextAlpha }, text);
+        DrawOutlinedText(ImGui.GetWindowDrawList(), ImGui.GetWindowPos() + (size - textSize) / 2f, TextDim, text);
     }
 
     // ------------------------------------------------------------ Mise en page
@@ -244,8 +244,8 @@ public sealed partial class ChatWindow
         if (line.Mentioned || line.Kind == ChatKind.TellIncoming)
         {
             var mark = line.Mentioned ? Accent : plugin.Colors.Of(line.Kind);
-            drawList.AddRectFilled(rowMin, rowMax, Col(mark with { W = 0.10f * TextAlpha }));
-            drawList.AddRectFilled(rowMin, new Vector2(rowMin.X + 3f * S, rowMax.Y), Col(mark with { W = 0.85f * TextAlpha }));
+            drawList.AddRectFilled(rowMin, rowMax, Col(mark with { W = 0.10f }));
+            drawList.AddRectFilled(rowMin, new Vector2(rowMin.X + 3f * S, rowMax.Y), Col(mark with { W = 0.85f }));
         }
 
         var header = headers[index];
@@ -279,7 +279,7 @@ public sealed partial class ChatWindow
         var x = pos.X;
         if (line.Kind == ChatKind.TellOutgoing)
         {
-            DrawOutlinedText(drawList, new Vector2(x, pos.Y), channel with { W = TextAlpha }, "À ");
+            DrawOutlinedText(drawList, new Vector2(x, pos.Y), channel, "À ");
             x += Measure("À ");
         }
 
@@ -296,7 +296,7 @@ public sealed partial class ChatWindow
         }
 
         // Le canal et l'heure, plus discrets.
-        var dim = Cfg.SecondaryColor with { W = Cfg.SecondaryColor.W * TextAlpha };
+        var dim = Cfg.SecondaryColor;
         x += 8f * S;
         if (Cfg.ShowChannelTags)
         {
@@ -304,8 +304,8 @@ public sealed partial class ChatWindow
             var tagW = Measure(tag);
             var pillMin = new Vector2(x, pos.Y + 1f * S);
             var pillMax = new Vector2(x + tagW + 10f * S, pos.Y + lineHeight - 1f * S);
-            drawList.AddRectFilled(pillMin, pillMax, Col(channel with { W = 0.14f * TextAlpha }), lineHeight / 2f);
-            DrawOutlinedText(drawList, new Vector2(x + 5f * S, pos.Y), channel with { W = TextAlpha }, tag);
+            drawList.AddRectFilled(pillMin, pillMax, Col(channel with { W = 0.14f }), lineHeight / 2f);
+            DrawOutlinedText(drawList, new Vector2(x + 5f * S, pos.Y), channel, tag);
             x = pillMax.X + 8f * S;
         }
 
@@ -329,7 +329,6 @@ public sealed partial class ChatWindow
 
     private void DrawRun(ImDrawListPtr drawList, Vector2 pos, string text, float width, Vector4 color, ChatLink? link, bool hoverable)
     {
-        color = color with { W = color.W * TextAlpha };
         DrawOutlinedText(drawList, pos, color, text);
 
         if (link == null)

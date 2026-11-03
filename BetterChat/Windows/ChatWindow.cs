@@ -46,12 +46,6 @@ public sealed partial class ChatWindow : Window, IDisposable
     private IDisposable? windowStyle;
     private IDisposable? windowColors;
 
-    // Discrétion quand le chat ne sert pas : 0 = au repos, 1 = en cours d'utilisation.
-    private float presence = 1f;
-    private DateTime lastActivity = DateTime.UtcNow;
-    private long lastSeenMessage;
-    private Vector2 lastWindowMin;
-    private Vector2 lastWindowMax;
     private DateTime lastDraw = DateTime.MinValue;
 
     public ChatWindow(Plugin plugin) : base("BetterChat###BetterChatWindow", BaseFlags)
@@ -105,9 +99,6 @@ public sealed partial class ChatWindow : Window, IDisposable
         if (focusRequested)
             ImGui.SetNextWindowFocus();
 
-        UpdatePresence();
-        var frame = FrameAlpha;
-
         windowStyle = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero)
                             .Push(ImGuiStyleVar.WindowRounding, 12f * S)
                             .Push(ImGuiStyleVar.WindowBorderSize, 1f)
@@ -115,15 +106,15 @@ public sealed partial class ChatWindow : Window, IDisposable
                             .Push(ImGuiStyleVar.ScrollbarRounding, 6f * S)
                             .Push(ImGuiStyleVar.PopupRounding, 8f * S)
                             .Push(ImGuiStyleVar.FrameRounding, 8f * S);
-        windowColors = ImRaii.PushColor(ImGuiCol.WindowBg, WindowBg with { W = Math.Clamp(Cfg.WindowOpacity, 0f, 1f) * frame })
-                             .Push(ImGuiCol.Border, Line with { W = Line.W * frame })
+        windowColors = ImRaii.PushColor(ImGuiCol.WindowBg, WindowBg with { W = Math.Clamp(Cfg.WindowOpacity, 0f, 1f) })
+                             .Push(ImGuiCol.Border, Line)
                              .Push(ImGuiCol.ChildBg, Vector4.Zero)
                              .Push(ImGuiCol.PopupBg, PopupBg)
                              .Push(ImGuiCol.ScrollbarBg, Vector4.Zero)
-                             .Push(ImGuiCol.ScrollbarGrab, new Vector4(1f, 1f, 1f, 0.14f * frame))
+                             .Push(ImGuiCol.ScrollbarGrab, new Vector4(1f, 1f, 1f, 0.14f))
                              .Push(ImGuiCol.ScrollbarGrabHovered, new Vector4(1f, 1f, 1f, 0.24f))
                              .Push(ImGuiCol.ScrollbarGrabActive, Accent with { W = 0.6f })
-                             .Push(ImGuiCol.ResizeGrip, new Vector4(1f, 1f, 1f, 0.06f * frame))
+                             .Push(ImGuiCol.ResizeGrip, new Vector4(1f, 1f, 1f, 0.06f))
                              .Push(ImGuiCol.ResizeGripHovered, Accent with { W = 0.5f })
                              .Push(ImGuiCol.ResizeGripActive, Accent with { W = 0.8f });
     }
@@ -139,8 +130,6 @@ public sealed partial class ChatWindow : Window, IDisposable
     public override void Draw()
     {
         lastDraw = DateTime.UtcNow;
-        lastWindowMin = ImGui.GetWindowPos();
-        lastWindowMax = lastWindowMin + ImGui.GetWindowSize();
 
         // Les onglets peuvent avoir été recréés entre-temps (réglages) : la recherche suit l'onglet affiché.
         if (searchOpen)
@@ -157,19 +146,15 @@ public sealed partial class ChatWindow : Window, IDisposable
             var inputH = MathF.Round(ImGui.GetTextLineHeight() + 20f * S);
             var searchH = UpdateSearchReveal(inputH);
 
-            using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(FrameAlpha, 0.001f) * ImGui.GetStyle().Alpha))
-            {
-                DrawTabBar(size, tabH);
-                if (searchH > 0f)
-                    DrawRevealedSearchBar(size, tabH, searchH, inputH);
-            }
+            DrawTabBar(size, tabH);
+            if (searchH > 0f)
+                DrawRevealedSearchBar(size, tabH, searchH, inputH);
 
             ImGui.SetCursorPos(new Vector2(0, tabH + searchH));
             DrawMessages(new Vector2(size.X, MathF.Max(size.Y - tabH - searchH - inputH, 10f)));
 
             ImGui.SetCursorPos(new Vector2(0, size.Y - inputH));
-            using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(FrameAlpha, 0.001f) * ImGui.GetStyle().Alpha))
-                DrawInputBar(size, inputH);
+            DrawInputBar(size, inputH);
         }
     }
 
@@ -185,38 +170,6 @@ public sealed partial class ChatWindow : Window, IDisposable
         }
 
         return chatFont.Available ? chatFont : null;
-    }
-
-    // ------------------------------------------------------------ Discrétion
-
-    private float FrameAlpha => Cfg.IdleFade ? Lerp(Math.Clamp(Cfg.IdleFrameOpacity, 0f, 1f), 1f, presence) : 1f;
-    private float TextAlpha => Cfg.IdleFade ? Lerp(Math.Clamp(Cfg.IdleTextOpacity, 0f, 1f), 1f, presence) : 1f;
-
-    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
-
-    /// <summary>Le cadre s'efface quand personne ne se sert du chat, et revient au survol ou à l'arrivée d'un message.</summary>
-    private void UpdatePresence()
-    {
-        var now = DateTime.UtcNow;
-        var mouse = ImGui.GetMousePos();
-        var hovered = mouse.X >= lastWindowMin.X && mouse.X < lastWindowMax.X && mouse.Y >= lastWindowMin.Y && mouse.Y < lastWindowMax.Y;
-
-        var newest = plugin.Messages.LastId;
-        if (newest != lastSeenMessage)
-        {
-            lastSeenMessage = newest;
-            var lines = plugin.Messages.Lines;
-            if (lines.Count > 0 && !lines[^1].FromHistory && !ChatKinds.IsBattle(lines[^1].Kind))
-                lastActivity = now;
-        }
-
-        if (hovered || inputActive || searchOpen || focusRequested || ImGui.IsPopupOpen(string.Empty, ImGuiPopupFlags.AnyPopup))
-            lastActivity = now;
-
-        var awake = (now - lastActivity).TotalSeconds < Math.Max(1, Cfg.IdleSeconds);
-        var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
-        var speed = awake ? 12f : 2.5f; // revient vite, s'efface doucement
-        presence += ((awake ? 1f : 0f) - presence) * (1f - MathF.Exp(-speed * dt));
     }
 
     // ------------------------------------------------------------ Petits dessins
@@ -289,7 +242,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         else if (hovered)
             drawList.AddRectFilled(center - half, center + half, Col(HoverOverlay), 7f * S);
 
-        // Au repos, un gris plus clair quand le contraste est activé : il se détache mieux du décor.
+        // Hors survol, un gris plus clair quand le contraste est activé : il se détache mieux du décor.
         var idle = Cfg.TextOutline ? Vector4.Lerp(TextDim, TextMain, 0.6f) : TextDim;
         var color = active ? Accent : hovered ? TextMain : idle;
         if (isCross)

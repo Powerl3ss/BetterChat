@@ -707,18 +707,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 {
                     changed |= SliderRow("Opacité du fond", "0 = fond complètement retiré.", Cfg.WindowOpacity, 0f, 1f, "%.2f", v => Cfg.WindowOpacity = v);
                 });
-
-                SectionTitle("Au repos");
-                Card(() =>
-                {
-                    changed |= ToggleRow("S'effacer quand le chat ne sert pas", "Le cadre disparaît doucement et revient au survol, à la saisie ou à l'arrivée d'un message.", Cfg.IdleFade, v => Cfg.IdleFade = v);
-                    using (ImRaii.Disabled(!Cfg.IdleFade))
-                    {
-                        changed |= SliderIntRow("Délai", "En secondes sans activité.", Cfg.IdleSeconds, 2, 120, v => Cfg.IdleSeconds = v);
-                        changed |= SliderRow("Opacité du cadre au repos", "Fond, onglets et zone de saisie.", Cfg.IdleFrameOpacity, 0f, 1f, "%.2f", v => Cfg.IdleFrameOpacity = v);
-                        changed |= SliderRow("Opacité du texte au repos", "0 = les messages disparaissent aussi.", Cfg.IdleTextOpacity, 0f, 1f, "%.2f", v => Cfg.IdleTextOpacity = v);
-                    }
-                });
                 break;
 
             default:

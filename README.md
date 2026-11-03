@@ -23,7 +23,6 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Recherche dans l'onglet affiché (Ctrl + F), par mot ou par joueur.
 - Noms, objets, cartes et adresses web cliquables. Survoler un objet montre son icône et son niveau. Une adresse s'affiche en entier avant de s'ouvrir.
 - Tes messages sont retrouvés au prochain lancement (sur ton PC uniquement, un fichier par personnage, jamais le combat).
-- Au repos, le cadre s'efface doucement pour libérer l'écran, puis revient au survol ou à l'arrivée d'un message.
 
 **Écrire**
 - Entrée ouvre la saisie, comme dans le jeu. La pastille de couleur montre où partira le message, et suit ce que tu tapes (`/p bonjour`).
