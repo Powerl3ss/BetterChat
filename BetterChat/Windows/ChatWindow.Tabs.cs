@@ -99,7 +99,7 @@ public sealed partial class ChatWindow
         return count switch
         {
             0 => null,
-            > 99 => "99+",
+            > 9 => "9+",
             _ => count.ToString(),
         };
     }
