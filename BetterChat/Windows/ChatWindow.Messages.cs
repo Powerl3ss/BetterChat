@@ -631,21 +631,23 @@ public sealed partial class ChatWindow
         return (left, width - rightGap);
     }
 
-    /// <summary>Flèche tracée à la main : elle prend exactement la hauteur des lettres, à côté desquelles elle se trouve.</summary>
+    /// <summary>Flèche tracée à la main, à la hauteur des chiffres du texte à côté d'elle.</summary>
     private static void DrawDownArrow(ImDrawListPtr drawList, float left, float top, float width, float height, Vector4 color)
     {
-        var thickness = MathF.Max(1.5f, 1.5f * S);
+        var thickness = MathF.Max(2f, 2f * S);
         var centerX = left + width / 2f;
-        var bottom = top + height;
+
+        // La pointe s'arrête un pixel plus haut : l'épaisseur du trait la prolonge jusqu'au bas de la flèche.
+        var tip = top + height - 1f;
         var headDrop = width / 2f;
 
         drawList.PathLineTo(new Vector2(centerX, top));
-        drawList.PathLineTo(new Vector2(centerX, bottom));
+        drawList.PathLineTo(new Vector2(centerX, tip));
         drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
 
-        drawList.PathLineTo(new Vector2(left, bottom - headDrop));
-        drawList.PathLineTo(new Vector2(centerX, bottom));
-        drawList.PathLineTo(new Vector2(left + width, bottom - headDrop));
+        drawList.PathLineTo(new Vector2(left, tip - headDrop));
+        drawList.PathLineTo(new Vector2(centerX, tip));
+        drawList.PathLineTo(new Vector2(left + width, tip - headDrop));
         drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
     }
 
@@ -664,20 +666,24 @@ public sealed partial class ChatWindow
         var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
         jumpReveal += (1f - jumpReveal) * (1f - MathF.Exp(-JumpRevealSpeed * dt));
 
-        // Tout part du dessin réel des lettres (sans les vides de la police) : la pilule se calcule autour de lui,
-        // avec des marges entières, pour que le texte tombe exactement au milieu.
-        var (inkTop, inkBottom) = DigitInk();
-        var inkHeight = inkBottom - inkTop;
+        // La police du jeu range ses lettres dans une case plus haute qu'elles, centrée sur leur dessin : la pilule
+        // se calcule autour de cette case, avec des marges entières, pour que le texte tombe au milieu.
+        var (cellTop, cellBottom) = DigitInk();
+        var cellHeight = cellBottom - cellTop;
         var (textInkLeft, textInkRight) = TextInkBounds(label);
 
         var paddingX = MathF.Round(12f * S);
         var paddingY = MathF.Round(6f * S);
         var gap = MathF.Round(6f * S);
-        var arrowWidth = MathF.Round(inkHeight * 0.8f);
+
+        // La hauteur des chiffres dans cette police, mesurée en jeu : 9 pixels pour 16. Largeur paire : la tige, sur
+        // deux pixels d'épaisseur, tombe alors pile sur la grille et reste nette.
+        var arrowHeight = MathF.Round(ImGui.GetFontSize() * 0.56f);
+        var arrowWidth = MathF.Round(arrowHeight * 0.45f) * 2f;
 
         var pillSize = new Vector2(
             paddingX * 2f + arrowWidth + gap + (textInkRight - textInkLeft),
-            MathF.Round(inkHeight) + paddingY * 2f);
+            MathF.Round(cellHeight) + paddingY * 2f);
 
         var windowPos = ImGui.GetWindowPos();
         var rest = windowPos + new Vector2((size.X - pillSize.X) / 2f, size.Y - pillSize.Y - 10f * S);
@@ -709,11 +715,15 @@ public sealed partial class ChatWindow
             drawList.AddRectFilled(min, max, Col(fill), rounding);
             drawList.AddRect(min, max, Col(hasNews ? news with { W = 0.55f } : new Vector4(1f, 1f, 1f, hovered ? 0.22f : 0.12f)), rounding);
 
-            var top = min.Y + paddingY;
             var arrowLeft = min.X + paddingX;
-            DrawDownArrow(drawList, arrowLeft, top, arrowWidth, MathF.Round(inkHeight), hasNews ? news : hovered ? TextMain : TextDim);
+            var textPos = new Vector2(arrowLeft + arrowWidth + gap - textInkLeft, MathF.Round(min.Y + paddingY - cellTop));
 
-            var textPos = new Vector2(arrowLeft + arrowWidth + gap - textInkLeft, MathF.Round(top - inkTop));
+            // Même centre que les chiffres. Arrondi vers le bas de l'écran : leur dessin tombe un demi-pixel sous le
+            // milieu de la case, c'est ce qui fait coïncider exactement le haut et le bas de la flèche avec eux.
+            var cellCenter = textPos.Y + (cellTop + cellBottom) / 2f;
+            var arrowTop = MathF.Ceiling(cellCenter - arrowHeight / 2f);
+            DrawDownArrow(drawList, arrowLeft, arrowTop, arrowWidth, arrowHeight, hasNews ? news : hovered ? TextMain : TextDim);
+
             drawList.AddText(textPos, Col(hasNews || hovered ? TextMain : new Vector4(0.82f, 0.84f, 0.89f, 1f)), label);
         }
 
