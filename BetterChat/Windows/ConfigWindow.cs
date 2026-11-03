@@ -710,7 +710,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 Card(() =>
                 {
                     changed |= ToggleRow("Afficher l'heure", null, Cfg.ShowTimestamps, v => Cfg.ShowTimestamps = v);
-                    changed |= ToggleRow("Afficher le canal", "Une petite étiquette (Groupe, CL, LS1...) à côté du nom.", Cfg.ShowChannelTags, v => Cfg.ShowChannelTags = v);
+                    changed |= ToggleRow("Afficher le canal", "Une petite étiquette (Groupe, Compagnie libre, LS1...) à côté du nom.", Cfg.ShowChannelTags, v => Cfg.ShowChannelTags = v);
                     changed |= ToggleRow("Contour sombre autour du texte", "Garde le texte lisible même sans fond. Les icônes reçoivent un fond discret.", Cfg.TextOutline, v => Cfg.TextOutline = v);
                     using (ImRaii.Disabled(!Cfg.TextOutline))
                         changed |= SliderRow("Intensité du contour", null, Cfg.OutlineStrength, 0.1f, 1f, "%.2f", v => Cfg.OutlineStrength = v);
