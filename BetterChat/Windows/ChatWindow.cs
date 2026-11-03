@@ -215,27 +215,18 @@ public sealed partial class ChatWindow : Window, IDisposable
         return windowWidth - EdgeMargin * S + inset - buttonSize;
     }
 
-    /// <summary>Icône avec le même contour que le texte : elle reste lisible sans fond.</summary>
-    private void DrawOutlinedIcon(FontAwesomeIcon icon, Vector2 min, Vector2 max, Vector4 color)
+    /// <summary>
+    /// Fond arrondi et discret derrière une icône, à la place d'un contour : sur un dessin aussi petit, un contour
+    /// bave sur les côtés. Il s'estompe à mesure que le fond de la fenêtre devient opaque, où il ne sert plus à rien.
+    /// </summary>
+    private void DrawIconBackdrop(Vector2 min, Vector2 max)
     {
-        if (Cfg.TextOutline && Cfg.OutlineStrength > 0f)
-        {
-            var shadow = new Vector4(0f, 0f, 0f, Math.Clamp(Cfg.OutlineStrength, 0f, 1f) * color.W);
-            var t = MathF.Max(1f, S);
-            for (var dx = -1; dx <= 1; dx++)
-            {
-                for (var dy = -1; dy <= 1; dy++)
-                {
-                    if (dx != 0 || dy != 0)
-                    {
-                        var offset = new Vector2(dx * t, dy * t);
-                        ConfigWindow.DrawIconCentered(icon, min + offset, max + offset, shadow);
-                    }
-                }
-            }
-        }
+        if (!Cfg.TextOutline || Cfg.OutlineStrength <= 0f)
+            return;
 
-        ConfigWindow.DrawIconCentered(icon, min, max, color);
+        var transparency = 1f - Math.Clamp(Cfg.WindowOpacity, 0f, 1f);
+        var alpha = 0.55f * Math.Clamp(Cfg.OutlineStrength, 0f, 1f) * transparency;
+        ImGui.GetWindowDrawList().AddRectFilled(min, max, Col(new Vector4(0f, 0f, 0f, alpha)), 7f * S);
     }
 
     private bool IconButton(string id, FontAwesomeIcon icon, float size, string? tooltip, bool active = false)
@@ -245,12 +236,16 @@ public sealed partial class ChatWindow : Window, IDisposable
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
 
+        DrawIconBackdrop(min, min + new Vector2(size, size));
+
         if (active)
             drawList.AddRectFilled(min, min + new Vector2(size, size), Col(Accent with { W = 0.20f }), 7f * S);
         else if (hovered)
             drawList.AddRectFilled(min, min + new Vector2(size, size), Col(HoverOverlay), 7f * S);
 
-        DrawOutlinedIcon(icon, min, min + new Vector2(size, size), active ? Accent : hovered ? TextMain : TextDim);
+        // Au repos, un gris plus clair quand le contraste est activé : il se détache mieux du décor.
+        var idle = Cfg.TextOutline ? Vector4.Lerp(TextDim, TextMain, 0.6f) : TextDim;
+        ConfigWindow.DrawIconCentered(icon, min, min + new Vector2(size, size), active ? Accent : hovered ? TextMain : idle);
 
         if (tooltip != null && hovered)
             ImGui.SetTooltip(tooltip);

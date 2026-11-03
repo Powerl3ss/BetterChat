@@ -689,7 +689,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 {
                     changed |= ToggleRow("Afficher l'heure", null, Cfg.ShowTimestamps, v => Cfg.ShowTimestamps = v);
                     changed |= ToggleRow("Afficher le canal", "Une petite étiquette (Groupe, CL, LS1...) à côté du nom.", Cfg.ShowChannelTags, v => Cfg.ShowChannelTags = v);
-                    changed |= ToggleRow("Contour sombre autour du texte", "Garde le texte lisible même sans fond.", Cfg.TextOutline, v => Cfg.TextOutline = v);
+                    changed |= ToggleRow("Contour sombre autour du texte", "Garde le texte lisible même sans fond. Les icônes reçoivent un fond discret.", Cfg.TextOutline, v => Cfg.TextOutline = v);
                     using (ImRaii.Disabled(!Cfg.TextOutline))
                         changed |= SliderRow("Intensité du contour", null, Cfg.OutlineStrength, 0.1f, 1f, "%.2f", v => Cfg.OutlineStrength = v);
                     changed |= SliderRow("Taille du texte", null, Cfg.FontSize, 10f, 36f, "%.0f", v => Cfg.FontSize = MathF.Round(v));
