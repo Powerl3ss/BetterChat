@@ -155,13 +155,13 @@ public sealed partial class ChatWindow : Window, IDisposable
             var size = ImGui.GetWindowSize();
             var tabH = MathF.Round(ImGui.GetTextLineHeight() + 14f * S);
             var inputH = MathF.Round(ImGui.GetTextLineHeight() + 20f * S);
-            var searchH = searchOpen ? inputH : 0f;
+            var searchH = UpdateSearchReveal(inputH);
 
             using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(FrameAlpha, 0.001f) * ImGui.GetStyle().Alpha))
             {
                 DrawTabBar(size, tabH);
-                if (searchOpen)
-                    DrawSearchBar(size, tabH, searchH);
+                if (searchH > 0f)
+                    DrawRevealedSearchBar(size, tabH, searchH, inputH);
             }
 
             ImGui.SetCursorPos(new Vector2(0, tabH + searchH));

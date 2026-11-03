@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Dalamud.Interface.Utility.Raii;
 using BetterChat.Core;
 
 namespace BetterChat.Windows;
@@ -10,6 +11,7 @@ namespace BetterChat.Windows;
 public sealed partial class ChatWindow
 {
     private const float TabPadding = EdgeMargin;
+    private const float SearchRevealSpeed = 14f;
     private const float BadgeGap = 6f;
     private const float BadgeDotSize = 6f;
     private const float BadgeDotGap = 4f;
@@ -18,6 +20,9 @@ public sealed partial class ChatWindow
     private bool searchOpen;
     private bool focusSearch;
     private string searchText = string.Empty;
+
+    // Ouverture de la barre de recherche : 0 = fermée, 1 = entièrement sortie.
+    private float searchReveal;
 
     // Soulignement de l'onglet actif : il glisse jusqu'au nouvel onglet.
     private float underlineX;
@@ -272,6 +277,28 @@ public sealed partial class ChatWindow
             feed.SetSearch(text);
     }
 
+    /// <summary>Fait avancer l'animation et renvoie la hauteur occupée en ce moment, sur un nombre entier de pixels.</summary>
+    private float UpdateSearchReveal(float fullHeight)
+    {
+        var target = searchOpen ? 1f : 0f;
+        var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
+        searchReveal += (target - searchReveal) * (1f - MathF.Exp(-SearchRevealSpeed * dt));
+        if (MathF.Abs(target - searchReveal) < 0.005f)
+            searchReveal = target;
+
+        return MathF.Round(fullHeight * searchReveal);
+    }
+
+    /// <summary>La barre glisse depuis le dessous des onglets en apparaissant, et les messages descendent pour lui faire place.</summary>
+    private void DrawRevealedSearchBar(Vector2 size, float tabHeight, float shown, float fullHeight)
+    {
+        var origin = ImGui.GetWindowPos();
+        ImGui.PushClipRect(origin + new Vector2(0f, tabHeight), origin + new Vector2(size.X, tabHeight + shown), true);
+        using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(searchReveal, 0.001f) * ImGui.GetStyle().Alpha))
+            DrawSearchBar(size, tabHeight + shown - fullHeight, fullHeight);
+        ImGui.PopClipRect();
+    }
+
     private void DrawSearchBar(Vector2 size, float top, float height)
     {
         var margin = EdgeMargin * S;
@@ -281,7 +308,8 @@ public sealed partial class ChatWindow
 
         ImGui.SetCursorPos(new Vector2(margin, MathF.Round(top + (height - ImGui.GetFrameHeight()) / 2f)));
         ImGui.SetNextItemWidth(closeX - gap - margin);
-        if (focusSearch)
+        // Attend que la barre soit assez sortie : une zone encore hors du cadre ne peut pas prendre le focus.
+        if (focusSearch && searchReveal >= 0.5f)
         {
             ImGui.SetKeyboardFocusHere();
             focusSearch = false;
