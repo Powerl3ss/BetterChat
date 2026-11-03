@@ -153,7 +153,8 @@ public sealed partial class ChatWindow
     /// Un petit point suivi du nombre, sans fond : discret, et il se lit sur n'importe quel décor.
     /// Bleu d'ordinaire, rouge quand on te parle directement.
     /// </summary>
-    private void DrawBadge(string text, float left, float centerY, bool urgent)
+    /// <param name="textY">Position d'écriture du nom de l'onglet : les chiffres partagent sa ligne de base.</param>
+    private void DrawBadge(string text, float left, float textY, bool urgent)
     {
         var drawList = ImGui.GetWindowDrawList();
         var layout = MeasureBadge(text);
@@ -162,13 +163,14 @@ public sealed partial class ChatWindow
         var dotColor = urgent ? new Vector4(0.91f, 0.29f, 0.29f, 1f) : new Vector4(0.30f, 0.65f, 1f, 1f);
         var digitColor = urgent ? new Vector4(1f, 0.47f, 0.47f, 1f) : new Vector4(0.55f, 0.76f, 1f, 1f);
 
-        // Les chiffres sur des pixels entiers, le point centré en hauteur sur leur dessin réel.
+        // Mêmes position et police que le nom de l'onglet : les chiffres sont sur sa ligne, au pixel près.
+        // Le point se centre sur le dessin réel des chiffres.
         var inkLeft = left + (BadgeDotSize + BadgeDotGap) * S;
         var originX = MathF.Round(inkLeft + layout.Width / 2f - layout.InkMiddle);
-        var originY = MathF.Round(centerY - (top + bottom) / 2f);
+        var originY = MathF.Floor(textY);
 
         var radius = BadgeDotSize / 2f * S;
-        var dotCenter = new Vector2(left + radius, originY + (top + bottom) / 2f);
+        var dotCenter = new Vector2(left + radius, MathF.Round(originY + (top + bottom) / 2f));
         if (Cfg.TextOutline && Cfg.OutlineStrength > 0f)
             drawList.AddCircleFilled(dotCenter, radius + MathF.Max(1f, S), Col(new Vector4(0f, 0f, 0f, 0.6f * Math.Clamp(Cfg.OutlineStrength, 0f, 1f))));
         drawList.AddCircleFilled(dotCenter, radius, Col(dotColor));
@@ -200,7 +202,7 @@ public sealed partial class ChatWindow
 
         var badge = BadgeText(feed);
         var badgeW = badge != null ? BadgeWidth(badge) : 0f;
-        var textY = min.Y + (size.Y - ImGui.GetTextLineHeight()) / 2f;
+        var textY = MathF.Floor(min.Y + (size.Y - ImGui.GetTextLineHeight()) / 2f);
         var textX = min.X + TabPadding * S;
         var textEnd = max.X - TabPadding * S - (badge != null ? badgeW + BadgeGap * S : 0f);
 
@@ -211,7 +213,7 @@ public sealed partial class ChatWindow
         drawList.PopClipRect();
 
         if (badge != null)
-            DrawBadge(badge, textEnd + BadgeGap * S, min.Y + size.Y / 2f, feed.UnreadMentions > 0);
+            DrawBadge(badge, textEnd + BadgeGap * S, textY, feed.UnreadMentions > 0);
 
         if (hovered && size.X < ImGui.CalcTextSize(feed.Settings.Name).X + TabPadding * 2f * S)
             ImGui.SetTooltip(feed.Settings.Name);
