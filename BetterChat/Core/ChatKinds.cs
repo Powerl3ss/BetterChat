@@ -247,6 +247,10 @@ public static class ChatKinds
     public static IEnumerable<ChatKind> InSection(ChatSection section) =>
         All.Where(i => i.Section == section).Select(i => i.Kind);
 
+    /// <summary>Combien de canaux de discussion différents dans cette liste ? Messages reçus et envoyés comptent pour un.</summary>
+    public static int TagCount(IEnumerable<ChatKind> kinds) =>
+        kinds.Select(Info).Where(i => i.HasAuthor).Select(i => i.Tag).Distinct().Count();
+
     public static bool IsBattle(ChatKind kind) => Info(kind).Section == ChatSection.Combat;
 
     public static bool IsTell(ChatKind kind) => kind is ChatKind.TellIncoming or ChatKind.TellOutgoing or ChatKind.GmTell;

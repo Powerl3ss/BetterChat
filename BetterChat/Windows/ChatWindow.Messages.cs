@@ -18,6 +18,8 @@ namespace BetterChat.Windows;
 /// </summary>
 public sealed partial class ChatWindow
 {
+    private static readonly Vector4 MessageText = new(0.90f, 0.91f, 0.94f, 1f);
+
     private const float ScrollStickMargin = 4f;
     private const int ScrollSettleFrameCount = 3;
     private const float JumpRevealSpeed = 16f;
@@ -47,6 +49,7 @@ public sealed partial class ChatWindow
     private float lineHeight;
     private float textWidth;
     private float textLeft;
+    private bool showChannelTags;
 
     private bool stickToBottom = true;
     private int unseenBelow;
@@ -128,7 +131,10 @@ public sealed partial class ChatWindow
 
     private void PrepareStack(ChatFeed feed)
     {
-        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor);
+        // Dans un onglet qui n'a qu'un seul canal, répéter son nom sur chaque message n'apporte rien.
+        showChannelTags = Cfg.ShowChannelTags && ChatKinds.TagCount(feed.Settings.Kinds) > 1;
+
+        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, showChannelTags, Cfg.SecondaryColor);
         var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
 
         if (rebuild)
@@ -163,10 +169,10 @@ public sealed partial class ChatWindow
         var flows = index > 0 && !header && Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(line);
 
         if (header)
-            height += lineHeight + 2f * S;
+            height += lineHeight + 1f * S;
 
         // Plus d'air entre deux auteurs qu'entre deux messages du même auteur.
-        height += header ? 8f * S : flows ? 1f * S : 3f * S;
+        height += header ? 10f * S : flows ? 2f * S : 3f * S;
         return height;
     }
 
@@ -192,7 +198,7 @@ public sealed partial class ChatWindow
         if (Cfg.ShowTimestamps)
             spans.Add(new ChatSpan(line.TimeUtc.ToLocalTime().ToString("HH:mm") + " ", DimRgba));
 
-        if (Cfg.ShowChannelTags && Cfg.Style == ChatStyle.Compact)
+        if (showChannelTags && Cfg.Style == ChatStyle.Compact)
             spans.Add(new ChatSpan($"[{ChatKinds.Info(line.Kind).Tag}] "));
 
         if (line.Sender.Count > 0 && line.SenderText.Length > 0)
@@ -262,13 +268,16 @@ public sealed partial class ChatWindow
 
         if (header)
         {
-            y += 6f * S;
+            y += 8f * S;
             DrawHeader(line, new Vector2(left, y), channel, hoverable);
-            y += lineHeight + 2f * S;
+            y += lineHeight + 1f * S;
         }
 
         var layout = LayoutOf(line);
-        DrawRuns(layout, new Vector2(left, y), channel, hoverable);
+
+        // Présentation moderne : le nom porte la couleur du canal, le texte reste clair pour se lire facilement.
+        var neutral = Cfg.Style == ChatStyle.Modern && !Cfg.ColoredMessages && ChatGrouping.HasAuthorHeader(line);
+        DrawRuns(layout, new Vector2(left, y), neutral ? MessageText : channel, hoverable);
 
         if (hovered && hoveredLink == null && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
         {
@@ -305,7 +314,7 @@ public sealed partial class ChatWindow
         // Le canal et l'heure, plus discrets.
         var dim = Cfg.SecondaryColor;
         x += 8f * S;
-        if (Cfg.ShowChannelTags)
+        if (showChannelTags)
         {
             var tag = ChatKinds.Info(line.Kind).Tag;
             var tagW = Measure(tag);
@@ -316,8 +325,13 @@ public sealed partial class ChatWindow
             x = pillMax.X + 8f * S;
         }
 
+        // L'heure en colonne, au bord droit : elle ne se mêle plus au nom, et se parcourt d'un coup d'oeil.
         if (Cfg.ShowTimestamps)
-            DrawOutlinedText(drawList, new Vector2(x, pos.Y), dim, line.TimeUtc.ToLocalTime().ToString("HH:mm"));
+        {
+            var time = line.TimeUtc.ToLocalTime().ToString("HH:mm");
+            var timeX = MathF.Max(x, pos.X + textWidth - Measure(time));
+            DrawOutlinedText(drawList, new Vector2(timeX, pos.Y), dim, time);
+        }
     }
 
     private void DrawRuns(LineLayout layout, Vector2 pos, Vector4 channel, bool hoverable)
