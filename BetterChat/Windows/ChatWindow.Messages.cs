@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
@@ -20,6 +21,7 @@ public sealed partial class ChatWindow
 {
     private const float ScrollStickMargin = 4f;
     private const int ScrollSettleFrameCount = 3;
+    private const float JumpRevealSpeed = 16f;
 
     // Air entre la liste et la barre d'onglets, puis la zone de saisie.
     private const float ListPaddingTop = 8f;
@@ -52,6 +54,9 @@ public sealed partial class ChatWindow
     private int lastCountForUnseen;
     private bool scrollToBottom;
     private float previousScrollMax;
+    private float jumpReveal;
+    private Vector2 jumpButtonMin;
+    private Vector2 jumpButtonMax;
     private float previousListHeight;
     private int scrollSettleFrames;
 
@@ -92,7 +97,9 @@ public sealed partial class ChatWindow
         var windowPos = ImGui.GetWindowPos();
         var origin = new Vector2(windowPos.X, windowPos.Y - scrollY + paddingTop);
 
-        var hoverable = ImGui.IsWindowHovered();
+        // Le bouton « Revenir en bas » flotte au-dessus des messages : il reçoit seul les clics à cet endroit.
+        var overJumpButton = !stickToBottom && jumpReveal > 0f && ImGui.IsMouseHoveringRect(jumpButtonMin, jumpButtonMax, false);
+        var hoverable = ImGui.IsWindowHovered() && !overJumpButton;
         hoveredLinkLastFrame = hoveredLink;
         hoveredLink = null;
 
@@ -603,27 +610,71 @@ public sealed partial class ChatWindow
             stickToBottom = true;
         }
 
-        if (!stickToBottom)
-            DrawJumpToBottom(size, scrollY);
+        if (stickToBottom)
+            jumpReveal = 0f;
+        else
+            DrawJumpToBottom(size);
     }
 
-    /// <summary>Pastille flottante : revenir au bas de la liste, avec le nombre de messages arrivés entre-temps.</summary>
-    private void DrawJumpToBottom(Vector2 size, float scrollY)
+    /// <summary>
+    /// Bouton flottant pour revenir au bas de la liste, avec le nombre de messages arrivés entre-temps.
+    /// Il remonte en apparaissant, et passe au bleu quand il y a du nouveau, comme les non-lus des onglets.
+    /// </summary>
+    private void DrawJumpToBottom(Vector2 size)
     {
-        var label = unseenBelow > 0 ? $"{unseenBelow} nouveau{(unseenBelow > 1 ? "x" : string.Empty)} message{(unseenBelow > 1 ? "s" : string.Empty)}" : "Revenir en bas";
-        var textSize = ImGui.CalcTextSize(label);
-        var pillSize = textSize + new Vector2(20f * S, 8f * S);
-        var pos = new Vector2((size.X - pillSize.X) / 2f, scrollY + size.Y - pillSize.Y - 8f * S);
+        var hasNews = unseenBelow > 0;
+        var count = unseenBelow > 99 ? "99+" : unseenBelow.ToString();
+        var label = hasNews
+            ? $"{count} nouveau{(unseenBelow > 1 ? "x" : string.Empty)} message{(unseenBelow > 1 ? "s" : string.Empty)}"
+            : "Revenir en bas";
 
-        ImGui.SetCursorPos(pos);
-        var min = ImGui.GetCursorScreenPos();
+        var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
+        jumpReveal += (1f - jumpReveal) * (1f - MathF.Exp(-JumpRevealSpeed * dt));
+
+        // Flèche, espace, texte : la pilule est calculée sur ce contenu, avec la même marge de chaque côté.
+        var padding = 12f * S;
+        var iconBox = MathF.Round(ImGui.GetTextLineHeight() * 0.8f);
+        var gap = 6f * S;
+        var pillSize = new Vector2(
+            MathF.Round(padding * 2f + iconBox + gap + ImGui.CalcTextSize(label).X),
+            MathF.Round(ImGui.GetTextLineHeight() + 10f * S));
+
+        var windowPos = ImGui.GetWindowPos();
+        var rest = windowPos + new Vector2((size.X - pillSize.X) / 2f, size.Y - pillSize.Y - 10f * S);
+        var min = new Vector2(MathF.Round(rest.X), MathF.Round(rest.Y + (1f - jumpReveal) * 8f * S));
+        var max = min + pillSize;
+
+        jumpButtonMin = min;
+        jumpButtonMax = max;
+
+        ImGui.SetCursorScreenPos(min);
         var clicked = ImGui.InvisibleButton("##jumpBottom", pillSize);
         var hovered = ImGui.IsItemHovered();
+        var held = ImGui.IsItemActive();
+        if (hovered)
+            ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
 
+        var news = new Vector4(0.55f, 0.76f, 1f, 1f);
+        var rounding = pillSize.Y / 2f;
         var drawList = ImGui.GetWindowDrawList();
-        var ink = new Vector4(0.05f, 0.06f, 0.09f, 1f);
-        drawList.AddRectFilled(min, min + pillSize, Col(unseenBelow > 0 ? Accent : hovered ? TextMain : TextDim), pillSize.Y / 2f);
-        drawList.AddText(min + new Vector2(10f * S, 4f * S), Col(ink), label);
+
+        using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(jumpReveal, 0.001f) * ImGui.GetStyle().Alpha))
+        {
+            // Ombre douce : le bouton se détache des messages qu'il recouvre.
+            drawList.AddRectFilled(min + new Vector2(0f, 2f * S), max + new Vector2(0f, 3f * S), Col(new Vector4(0f, 0f, 0f, 0.28f)), rounding);
+
+            var fill = held ? new Vector4(0.20f, 0.22f, 0.29f, 0.98f)
+                : hovered ? new Vector4(0.16f, 0.18f, 0.24f, 0.98f)
+                : new Vector4(0.10f, 0.11f, 0.15f, 0.96f);
+            drawList.AddRectFilled(min, max, Col(fill), rounding);
+            drawList.AddRect(min, max, Col(hasNews ? news with { W = 0.55f } : new Vector4(1f, 1f, 1f, hovered ? 0.22f : 0.12f)), rounding);
+
+            var iconMin = new Vector2(min.X + padding, min.Y + MathF.Round((pillSize.Y - iconBox) / 2f));
+            ConfigWindow.DrawIconCentered(FontAwesomeIcon.ArrowDown, iconMin, iconMin + new Vector2(iconBox, iconBox), hasNews ? news : hovered ? TextMain : TextDim);
+
+            var textPos = new Vector2(iconMin.X + iconBox + gap, MathF.Floor(min.Y + (pillSize.Y - ImGui.GetTextLineHeight()) / 2f));
+            drawList.AddText(textPos, Col(hasNews || hovered ? TextMain : new Vector4(0.82f, 0.84f, 0.89f, 1f)), label);
+        }
 
         if (clicked)
             scrollToBottom = true;
