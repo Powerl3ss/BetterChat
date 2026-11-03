@@ -13,7 +13,6 @@ var tests = new (string Name, Action Run)[]
     ("Canaux : chaque canal a sa commande", Tests.ChannelCommands),
     ("Canaux : préfixe tapé reconnu", Tests.TypedPrefix),
     ("Canaux : retour vers le numéro du jeu", Tests.ToGameChannelRoundTrip),
-    ("Étiquettes : un seul canal, même avec ses annonces", Tests.TagCountIgnoresNonChat),
     ("Canaux : les commandes du jeu remplacent celles par défaut", Tests.GameCommandsReplaceDefaults),
     ("Pastille : un seul chiffre donne un rond, centré", Tests.BadgeSingleDigit),
     ("Pastille : chiffres réguliers malgré des largeurs différentes", Tests.BadgeDigitsAreEven),
@@ -158,15 +157,6 @@ internal static class Tests
         Same(ChatKind.TellOutgoing, ChatChannels.FromTypedPrefix("/tell Jean Dupont salut"), "tell");
         Same(null, ChatChannels.FromTypedPrefix("bonjour"), "message normal");
         Same(null, ChatChannels.FromTypedPrefix("/wave"), "autre commande");
-    }
-
-    public static void TagCountIgnoresNonChat()
-    {
-        Same(1, ChatKinds.TagCount(new[] { ChatKind.FreeCompany, ChatKind.FreeCompanyAnnouncement, ChatKind.System }), "compagnie et ses annonces");
-        Same(1, ChatKinds.TagCount(new[] { ChatKind.TellIncoming, ChatKind.TellOutgoing }), "messages privés reçus et envoyés");
-        Same(1, ChatKinds.TagCount(new[] { ChatKind.Party, ChatKind.CrossParty }), "groupe et groupe inter-mondes");
-        Same(2, ChatKinds.TagCount(new[] { ChatKind.Party, ChatKind.Alliance }), "deux canaux");
-        Same(0, ChatKinds.TagCount(new[] { ChatKind.System }), "aucune discussion");
     }
 
     public static void ToGameChannelRoundTrip()

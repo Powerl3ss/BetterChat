@@ -32,7 +32,6 @@ public class Configuration : IPluginConfiguration
     public float FontSize { get; set; } = 16f;
     public bool ShowTimestamps { get; set; } = true;
     public bool ShowChannelTags { get; set; } = true;
-    public bool ColoredMessages { get; set; } = false;
     public bool UseGameColors { get; set; } = true;
     public bool TextOutline { get; set; } = true;
     public float OutlineStrength { get; set; } = 0.90f;

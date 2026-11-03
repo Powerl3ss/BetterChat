@@ -18,8 +18,6 @@ namespace BetterChat.Windows;
 /// </summary>
 public sealed partial class ChatWindow
 {
-    private static readonly Vector4 MessageText = new(0.90f, 0.91f, 0.94f, 1f);
-
     private const float ScrollStickMargin = 4f;
     private const int ScrollSettleFrameCount = 3;
     private const float JumpRevealSpeed = 16f;
@@ -49,7 +47,6 @@ public sealed partial class ChatWindow
     private float lineHeight;
     private float textWidth;
     private float textLeft;
-    private bool showChannelTags;
 
     private bool stickToBottom = true;
     private int unseenBelow;
@@ -131,10 +128,7 @@ public sealed partial class ChatWindow
 
     private void PrepareStack(ChatFeed feed)
     {
-        // Dans un onglet qui n'a qu'un seul canal, répéter son nom sur chaque message n'apporte rien.
-        showChannelTags = Cfg.ShowChannelTags && ChatKinds.TagCount(feed.Settings.Kinds) > 1;
-
-        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, showChannelTags, Cfg.SecondaryColor);
+        var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor);
         var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
 
         if (rebuild)
@@ -198,7 +192,7 @@ public sealed partial class ChatWindow
         if (Cfg.ShowTimestamps)
             spans.Add(new ChatSpan(line.TimeUtc.ToLocalTime().ToString("HH:mm") + " ", DimRgba));
 
-        if (showChannelTags && Cfg.Style == ChatStyle.Compact)
+        if (Cfg.ShowChannelTags && Cfg.Style == ChatStyle.Compact)
             spans.Add(new ChatSpan($"[{ChatKinds.Info(line.Kind).Tag}] "));
 
         if (line.Sender.Count > 0 && line.SenderText.Length > 0)
@@ -274,10 +268,7 @@ public sealed partial class ChatWindow
         }
 
         var layout = LayoutOf(line);
-
-        // Présentation moderne : le nom porte la couleur du canal, le texte reste clair pour se lire facilement.
-        var neutral = Cfg.Style == ChatStyle.Modern && !Cfg.ColoredMessages && ChatGrouping.HasAuthorHeader(line);
-        DrawRuns(layout, new Vector2(left, y), neutral ? MessageText : channel, hoverable);
+        DrawRuns(layout, new Vector2(left, y), channel, hoverable);
 
         if (hovered && hoveredLink == null && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
         {
@@ -314,7 +305,7 @@ public sealed partial class ChatWindow
         // Le canal et l'heure, plus discrets.
         var dim = Cfg.SecondaryColor;
         x += 8f * S;
-        if (showChannelTags)
+        if (Cfg.ShowChannelTags)
         {
             var tag = ChatKinds.Info(line.Kind).Tag;
             var tagW = Measure(tag);
