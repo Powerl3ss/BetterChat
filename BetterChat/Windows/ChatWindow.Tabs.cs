@@ -2,7 +2,6 @@ using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
-using Dalamud.Interface.ManagedFontAtlas;
 using BetterChat.Core;
 
 namespace BetterChat.Windows;
@@ -11,11 +10,9 @@ namespace BetterChat.Windows;
 public sealed partial class ChatWindow
 {
     private const float TabPadding = EdgeMargin;
-    private const float BadgePadding = 4f;
+    private const float BadgePadding = 6f;
     private const float BadgeVerticalPadding = 3f;
     private const float BadgeGap = 6f;
-
-    private IFontHandle? badgeFont;
 
     private int menuTab = -1;
     private bool searchOpen;
@@ -90,10 +87,7 @@ public sealed partial class ChatWindow
         var width = ImGui.CalcTextSize(feed.Settings.Name).X + TabPadding * 2f * S;
         var badge = BadgeText(feed);
         if (badge != null)
-        {
-            using (PushBadgeFont())
-                width += BadgeWidth(badge) + BadgeGap * S;
-        }
+            width += BadgeWidth(badge) + BadgeGap * S;
 
         return width;
     }
@@ -109,12 +103,6 @@ public sealed partial class ChatWindow
             _ => count.ToString(),
         };
     }
-
-    // Police des pastilles : 9,6 points est une taille exacte de la police du jeu, donc nette.
-    private IFontHandle BadgeFont => badgeFont ??= Plugin.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(
-        e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(9.6f * 4f / 3f)));
-
-    private IDisposable? PushBadgeFont() => BadgeFont.Available ? BadgeFont.Push() : null;
 
     /// <summary>Mesure et place les chiffres avec la police active : voir <see cref="BadgeLayout"/>.</summary>
     private static unsafe BadgeLayout MeasureBadge(string text)
@@ -139,8 +127,9 @@ public sealed partial class ChatWindow
         for (var i = 0; i < text.Length; i++)
             boxes[i] = Box(text[i]);
 
-        var height = BadgeHeight();
-        return BadgeLayout.Compute(boxes, MathF.Ceiling(cell), MathF.Round(1f * S), MathF.Round(BadgePadding * S), height);
+        // Toujours un peu plus large que haute, même avec un seul chiffre : une pilule, pas un rond.
+        var minWidth = MathF.Round(BadgeHeight() * 1.3f);
+        return BadgeLayout.Compute(boxes, MathF.Ceiling(cell), MathF.Round(1f * S), MathF.Round(BadgePadding * S), minWidth);
     }
 
     /// <summary>Haut et bas réels des chiffres, depuis la position d'écriture. La hauteur de la pastille en découle.</summary>
@@ -164,8 +153,8 @@ public sealed partial class ChatWindow
     private static float BadgeWidth(string text) => MeasureBadge(text).Width;
 
     /// <summary>
-    /// Une pastille ronde pour un chiffre, allongée au-delà. Rouge quand on te parle directement, sinon sombre et
-    /// bordée de la couleur d'accent : elle se voit sans voler la vedette au nom de l'onglet.
+    /// Une pilule pleine, sans bordure, avec les chiffres à la taille du nom de l'onglet pour rester bien lisibles.
+    /// Gris ardoise d'ordinaire pour ne pas voler la vedette au nom, rouge quand on te parle directement.
     /// </summary>
     private void DrawBadge(string text, float left, float centerY, bool urgent)
     {
@@ -180,14 +169,11 @@ public sealed partial class ChatWindow
         var center = new Vector2(originX + layout.InkMiddle, originY + (top + bottom) / 2f);
         var half = new Vector2(layout.Width, height) / 2f;
 
-        var fill = urgent ? Danger : new Vector4(0.13f, 0.15f, 0.20f, 0.95f);
+        var fill = urgent ? new Vector4(0.91f, 0.29f, 0.29f, 1f) : new Vector4(0.28f, 0.31f, 0.37f, 0.92f);
         drawList.AddRectFilled(center - half, center + half, Col(fill), height / 2f);
-        if (!urgent)
-            drawList.AddRect(center - half, center + half, Col(Accent with { W = 0.55f }), height / 2f);
 
-        var ink = urgent ? new Vector4(0.10f, 0.03f, 0.03f, 1f) : TextMain;
         for (var i = 0; i < text.Length; i++)
-            drawList.AddText(new Vector2(originX + layout.PenX[i], originY), Col(ink), text[i].ToString());
+            drawList.AddText(new Vector2(originX + layout.PenX[i], originY), Col(new Vector4(1f, 1f, 1f, 1f)), text[i].ToString());
     }
 
     private void DrawTab(int index, Vector2 pos, Vector2 size, bool active)
@@ -212,13 +198,7 @@ public sealed partial class ChatWindow
         }
 
         var badge = BadgeText(feed);
-        var badgeW = 0f;
-        if (badge != null)
-        {
-            using (PushBadgeFont())
-                badgeW = BadgeWidth(badge);
-        }
-
+        var badgeW = badge != null ? BadgeWidth(badge) : 0f;
         var textY = min.Y + (size.Y - ImGui.GetTextLineHeight()) / 2f;
         var textX = min.X + TabPadding * S;
         var textEnd = max.X - TabPadding * S - (badge != null ? badgeW + BadgeGap * S : 0f);
@@ -230,10 +210,7 @@ public sealed partial class ChatWindow
         drawList.PopClipRect();
 
         if (badge != null)
-        {
-            using (PushBadgeFont())
-                DrawBadge(badge, textEnd + BadgeGap * S, min.Y + size.Y / 2f, feed.UnreadMentions > 0);
-        }
+            DrawBadge(badge, textEnd + BadgeGap * S, min.Y + size.Y / 2f, feed.UnreadMentions > 0);
 
         if (hovered && size.X < ImGui.CalcTextSize(feed.Settings.Name).X + TabPadding * 2f * S)
             ImGui.SetTooltip(feed.Settings.Name);

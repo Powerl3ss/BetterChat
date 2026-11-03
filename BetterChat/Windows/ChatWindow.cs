@@ -67,11 +67,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         inputCallback = OnInputCallback;
     }
 
-    public void Dispose()
-    {
-        chatFont?.Dispose();
-        badgeFont?.Dispose();
-    }
+    public void Dispose() => chatFont?.Dispose();
 
     /// <summary>Vrai si la fenêtre a été dessinée à l'instant : sinon, seule la zone de saisie du jeu peut servir.</summary>
     public bool IsShownNow => IsOpen && (DateTime.UtcNow - lastDraw).TotalSeconds < 0.5;
