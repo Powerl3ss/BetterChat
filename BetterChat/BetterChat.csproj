@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <!-- Champs du manifeste affichés dans /xlplugins -->
+    <Author>Powerl3ss</Author>
+    <Name>BetterChat</Name>
+    <!-- Exigée par DalamudPackager, puis vidée par la GitHub Action pour n'afficher que la ligne des commandes. -->
+    <Description>BetterChat</Description>
+    <Punchline>Un chat moderne à la place du chat du jeu : onglets, recherche, liens cliquables, mentions.</Punchline>
+    <RepoUrl>https://github.com/Powerl3ss/BetterChat</RepoUrl>
+    <Tags>chat;ui;hud;tabs;social</Tags>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IconUrl>https://raw.githubusercontent.com/Powerl3ss/BetterChat/main/BetterChat/images/icon.png</IconUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="images\icon.png" LogicalName="BetterChat.icon.png" />
+    <Content Include="images\icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+  </ItemGroup>
+</Project>
