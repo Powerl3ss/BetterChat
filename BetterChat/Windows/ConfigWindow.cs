@@ -675,8 +675,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
         displaySection = Segmented("##display", new[]
         {
-            ("Messages", FontAwesomeIcon.Comments),
-            ("Fenêtre", FontAwesomeIcon.WindowMaximize),
+            ("Chat", FontAwesomeIcon.Comments),
             ("Couleurs", FontAwesomeIcon.Palette),
         }, displaySection);
 
@@ -700,9 +699,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     changed |= ToggleRow("Garder le focus après l'envoi", "Pour enchaîner les messages. Désactivé : le jeu reprend le clavier, comme d'habitude.", Cfg.KeepFocusAfterSend, v => Cfg.KeepFocusAfterSend = v);
                     changed |= ToggleRow("Proposer les commandes", "En tapant « / » : commandes du jeu et des plugins, complétées avec Tab.", Cfg.CommandSuggestions, v => Cfg.CommandSuggestions = v);
                 });
-                break;
 
-            case 1:
+                SectionTitle("Fenêtre");
                 Card(() =>
                 {
                     changed |= SliderRow("Opacité du fond", "0 = fond complètement retiré.", Cfg.WindowOpacity, 0f, 1f, "%.2f", v => Cfg.WindowOpacity = v);

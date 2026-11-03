@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
@@ -25,7 +24,7 @@ public sealed partial class ChatWindow
         var drawList = ImGui.GetWindowDrawList();
         var origin = ImGui.GetWindowPos();
         var iconSize = height - 6f * S;
-        var iconsW = (iconSize + 2f * S) * 3f + 6f * S;
+        var iconsW = (iconSize + 2f * S) * 2f + 6f * S;
         var pad = 8f * S;
         var available = size.X - iconsW - pad;
 
@@ -64,11 +63,7 @@ public sealed partial class ChatWindow
         DrawTabMenu();
 
         // Boutons à droite.
-        ImGui.SetCursorPos(new Vector2(size.X - (iconSize + 2f * S) * 3f - 4f * S, 3f * S));
-        if (IconButton("##addTab", FontAwesomeIcon.Plus, iconSize, "Ajouter un onglet"))
-            AddTab();
-
-        ImGui.SameLine(0, 2f * S);
+        ImGui.SetCursorPos(new Vector2(size.X - (iconSize + 2f * S) * 2f - 4f * S, 3f * S));
         if (IconButton("##search", FontAwesomeIcon.Search, iconSize, "Rechercher dans cet onglet (Ctrl + F)", searchOpen))
             ToggleSearch();
 
@@ -186,15 +181,6 @@ public sealed partial class ChatWindow
         }
 
         ImGui.EndPopup();
-    }
-
-    private void AddTab()
-    {
-        Cfg.Tabs.Add(new ChatTabSettings { Name = $"Onglet {Cfg.Tabs.Count + 1}", Kinds = ChatTabPresets.General().Kinds.ToList() });
-        Cfg.ActiveTab = Cfg.Tabs.Count - 1;
-        Cfg.Save();
-        plugin.RebuildFeeds();
-        plugin.OpenConfigAtTabs();
     }
 
     // ------------------------------------------------------------ Recherche
