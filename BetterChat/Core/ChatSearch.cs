@@ -205,10 +205,10 @@ public sealed class SpamFilter
     }
 }
 
-/// <summary>Ce qui s'affiche au-dessus d'un message : le changement de date, la reconnexion et le repère des nouveaux messages.</summary>
-public readonly record struct LineSeparators(bool NewMessages, DateTime? Day, bool NewSession = false)
+/// <summary>Ce qui s'affiche au-dessus d'un message : le repère des nouveaux messages et le changement de date.</summary>
+public readonly record struct LineSeparators(bool NewMessages, DateTime? Day)
 {
-    public bool Any => NewMessages || Day != null || NewSession;
+    public bool Any => NewMessages || Day != null;
 
     /// <param name="firstUnreadId">Premier message arrivé pendant que l'onglet n'était pas affiché.</param>
     public static LineSeparators Between(ChatLine? previous, ChatLine line, long? firstUnreadId, DateTime today)
@@ -218,9 +218,9 @@ public readonly record struct LineSeparators(bool NewMessages, DateTime? Day, bo
             ? (day != today.Date ? day : null) // en haut de la liste, seulement si ce n'est pas aujourd'hui
             : (previous.TimeUtc.ToLocalTime().Date != day ? day : null);
 
-        // La reconnexion suffit quand elle tombe au même endroit que le repère : deux barres de suite diraient la même chose.
-        var newSession = previous != null && previous.Session != line.Session;
-        return new LineSeparators(firstUnreadId == line.Id && !newSession, shownDay, newSession);
+        // Juste sous la barre de connexion, le repère ne ferait que répéter la même chose.
+        var marked = firstUnreadId == line.Id && line.Kind != ChatKind.SessionStart && previous?.Kind != ChatKind.SessionStart;
+        return new LineSeparators(marked, shownDay);
     }
 }
 

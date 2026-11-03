@@ -40,8 +40,11 @@ var tests = new (string Name, Action Run)[]
     ("Séparateurs : le repère disparaît en quittant l'onglet", Tests.NewMarkerClearsOnLeave),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
-    ("Séparateurs : barre à chaque reconnexion", Tests.SessionSeparators),
-    ("Séparateurs : la connexion est gardée dans l'historique", Tests.SessionIsSaved),
+    ("Connexion : la barre apparaît tout de suite, dans tous les onglets", Tests.SessionBarInEveryTab),
+    ("Connexion : ni en haut de la liste, ni deux de suite", Tests.SessionBarNotDoubled),
+    ("Connexion : pas de non-lu ni de double barre avec le repère", Tests.SessionBarIsNotUnread),
+    ("Connexion : absente des résultats de recherche", Tests.SessionBarHiddenBySearch),
+    ("Connexion : gardée dans l'historique", Tests.SessionBarIsSaved),
     ("Répétitions : pas d'une connexion à l'autre", Tests.RepeatsStopAtSession),
     ("Export : format lisible, sans symboles du jeu", Tests.ExportFormat),
     ("Aperçu : raccourcis remplacés, inconnus conservés", Tests.MacroExpansion),
@@ -609,38 +612,85 @@ internal static class Tests
         Check(!LineSeparators.Between(first, second, 41, Today).NewMessages, "pas ici");
     }
 
-    private static ChatLine InSession(long session, string text = "salut")
+    public static void SessionBarInEveryTab()
     {
-        var line = Line(ChatKind.Say, text, "Jean");
-        line.Session = session;
-        return line;
+        var log = new ChatLog();
+        var party = Feed(ChatKind.Party);
+        log.Add(Line(ChatKind.Party, "avant", "Jean"));
+        party.Update(log, 0, NoMute);
+
+        log.Add(ChatLine.SessionStart(T0));
+        party.Update(log, 0, NoMute);
+
+        Same(2, party.Visible.Count, "visible sans attendre de nouveau message");
+        Same(ChatKind.SessionStart, party.Visible[1].Kind, "la barre");
     }
 
-    public static void SessionSeparators()
+    public static void SessionBarNotDoubled()
     {
-        var old = InSession(0);
-        var first = InSession(5);
-        var same = InSession(5);
-        var next = InSession(9);
+        var log = new ChatLog();
+        var feed = Feed(ChatKind.Say);
+        log.Add(ChatLine.SessionStart(T0));
+        feed.Update(log, 0, NoMute);
+        Same(0, feed.Visible.Count, "rien à séparer en haut");
 
-        Check(LineSeparators.Between(old, first, null, Today).NewSession, "après l'ancien historique");
-        Check(!LineSeparators.Between(first, same, null, Today).NewSession, "même connexion");
-        Check(LineSeparators.Between(same, next, null, Today).NewSession, "reconnexion");
-        Check(!LineSeparators.Between(null, first, null, Today).NewSession, "rien en haut de la liste");
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+        log.Add(ChatLine.SessionStart(T0));
+        log.Add(ChatLine.SessionStart(T0));
+        feed.Update(log, 0, NoMute);
+        Same(2, feed.Visible.Count, "une seule barre après le message");
 
-        next.Id = 42;
-        var both = LineSeparators.Between(same, next, 42, Today);
-        Check(both.NewSession && !both.NewMessages, "une seule barre quand le repère tombe au même endroit");
+        feed.Update(log, 1, NoMute);
+        Same(2, feed.Visible.Count, "pareil après une reconstruction");
     }
 
-    public static void SessionIsSaved()
+    public static void SessionBarIsNotUnread()
+    {
+        var log = new ChatLog();
+        var feed = Feed(ChatKind.Say);
+        log.Add(Line(ChatKind.Say, "avant", "Jean"));
+        feed.Update(log, 0, NoMute);
+        feed.MarkRead();
+
+        var bar = ChatLine.SessionStart(T0);
+        log.Add(bar);
+        feed.Update(log, 0, NoMute);
+        Same(0, feed.Unread, "la barre n'est pas un message à lire");
+        Same(null, feed.FirstUnreadId, "ni le repère");
+
+        var next = Line(ChatKind.Say, "après", "Jean");
+        log.Add(next);
+        feed.Update(log, 0, NoMute);
+        Same(1, feed.Unread, "le message suivant compte");
+        Check(!LineSeparators.Between(bar, next, feed.FirstUnreadId, Today).NewMessages, "pas deux barres de suite");
+    }
+
+    public static void SessionBarHiddenBySearch()
+    {
+        var log = new ChatLog();
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+        log.Add(ChatLine.SessionStart(T0));
+
+        var feed = Feed(ChatKind.Say);
+        feed.SetSearch("connexion", Today);
+        feed.Update(log, 0, NoMute);
+        Same(0, feed.Visible.Count, "recherche sur son texte");
+
+        feed.SetSearch($"date:{T0.ToLocalTime():dd/MM/yyyy}", Today);
+        feed.Update(log, 0, NoMute);
+        Check(feed.Visible.All(l => l.Kind != ChatKind.SessionStart), "recherche par date");
+    }
+
+    public static void SessionBarIsSaved()
     {
         var directory = TempDirectory();
         var store = Store(directory);
-        store.Enqueue(InSession(123));
+        store.Enqueue(ChatLine.SessionStart(T0));
         store.Flush();
 
-        Same(123L, Store(directory).Load(10).Single().Session, "relu");
+        var read = Store(directory).Load(10).Single();
+        Same(ChatKind.SessionStart, read.Kind, "relue");
+        Same("Nouvelle connexion", read.BodyText, "son texte");
     }
 
     public static void RepeatsStopAtSession()
@@ -649,11 +699,12 @@ internal static class Tests
         var feed = CollapsingFeed(ChatKind.Say);
         feed.Update(log, 0, NoMute);
 
-        log.Add(InSession(1));
-        log.Add(InSession(2));
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
+        log.Add(ChatLine.SessionStart(T0));
+        log.Add(Line(ChatKind.Say, "salut", "Jean"));
         feed.Update(log, 0, NoMute);
 
-        Same(2, feed.Visible.Count, "deux lignes");
+        Same(3, feed.Visible.Count, "le message, la barre, le message");
     }
 
     public static void DateLabels()

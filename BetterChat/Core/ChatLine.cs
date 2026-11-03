@@ -94,9 +94,6 @@ public sealed class ChatLine
     /// <summary>Job de l'auteur quand il a écrit, s'il était dans le groupe ou à proximité. 0 : inconnu.</summary>
     public uint AuthorJob { get; set; }
 
-    /// <summary>La connexion au jeu pendant laquelle il est arrivé. 0 : message enregistré avant que cette information existe.</summary>
-    public long Session { get; set; }
-
     /// <summary>Le message cite ton nom ou un mot surveillé.</summary>
     public bool Mentioned { get; set; }
 
@@ -106,6 +103,14 @@ public sealed class ChatLine
 
     private string? senderText;
     private string? bodyText;
+    /// <summary>La barre posée au moment d'une connexion, pour séparer les messages conservés des nouveaux.</summary>
+    public static ChatLine SessionStart(DateTime timeUtc) => new()
+    {
+        TimeUtc = timeUtc,
+        Kind = ChatKind.SessionStart,
+        Body = new List<ChatSpan> { new("Nouvelle connexion") },
+    };
+
     private string? foldedText;
     private string? foldedBody;
     private string? foldedAuthor;

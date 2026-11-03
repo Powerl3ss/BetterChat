@@ -7,6 +7,9 @@ namespace BetterChat.Core;
 /// <summary>Type d'un message. Les numéros sont ceux du jeu, ce qui permet une simple conversion.</summary>
 public enum ChatKind : ushort
 {
+    /// <summary>Pas un message du jeu : la barre posée à chaque connexion. Ce numéro n'existe pas dans le jeu.</summary>
+    SessionStart = 65000,
+
     Other = 0,
     Debug = 1,
     Urgent = 2,
@@ -235,7 +238,10 @@ public static class ChatKinds
         _ => section.ToString(),
     };
 
-    public static ChatKindInfo Info(ChatKind kind) => ByKind.TryGetValue(kind, out var info) ? info : Unknown;
+    private static readonly ChatKindInfo SessionStartInfo = new(ChatKind.SessionStart, "Connexion", "Connexion", ChatSection.Announcements, Grey, false);
+
+    public static ChatKindInfo Info(ChatKind kind) =>
+        kind == ChatKind.SessionStart ? SessionStartInfo : ByKind.TryGetValue(kind, out var info) ? info : Unknown;
 
     /// <summary>Un code de message inconnu reste visible, sous « Autres messages », au lieu de se perdre.</summary>
     public static ChatKind Normalize(ushort raw)

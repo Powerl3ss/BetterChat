@@ -72,8 +72,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ChatWindow chatWindow;
     private readonly ConfigWindow configWindow;
 
-    // Change à chaque déconnexion : les messages suivants forment une nouvelle session, marquée dans le chat.
-    private long session = DateTime.UtcNow.Ticks;
+    // Une barre est posée à la prochaine connexion. Null : au tout premier passage, on ne sait pas encore si on est en jeu.
+    private bool? sessionStartDue;
     private bool detachedWindowsDirty = true;
     private int filterVersion;
     private ulong loadedCharacter;
@@ -209,7 +209,7 @@ public sealed class Plugin : IDalamudPlugin
 
     // ------------------------------------------------------- Événements du jeu
 
-    private void OnLogout(int type, int code) => session = DateTime.UtcNow.Ticks;
+    private void OnLogout(int type, int code) => sessionStartDue = true;
 
     private void OnChatMessage(IChatMessage message)
     {
@@ -220,7 +220,6 @@ public sealed class Plugin : IDalamudPlugin
         // Tes propres messages n'ont pas de lien sur ton nom, et il peut être précédé de ton numéro de groupe.
         var isOwn = LocalName.Length > 0 && line.AuthorKey.EndsWith(LocalName, StringComparison.Ordinal);
         line.AuthorJob = JobOfAuthor(line, isOwn);
-        line.Session = session;
 
         // Un message masqué reste en mémoire (retirer la règle le fait réapparaître), mais il n'alerte jamais.
         if (spam.Matches(line))
@@ -297,7 +296,7 @@ public sealed class Plugin : IDalamudPlugin
         Messages.Clear();
         foreach (var line in loaded)
         {
-            if (wantedKinds.Contains(line.Kind))
+            if (wantedKinds.Contains(line.Kind) || line.Kind == ChatKind.SessionStart)
                 Messages.Add(line);
         }
 
@@ -326,6 +325,8 @@ public sealed class Plugin : IDalamudPlugin
         var character = CurrentCharacterId;
         if (character != 0 && character != loadedCharacter)
             LoadCharacter(character);
+        AddSessionStartIfDue(character);
+
         if (pendingHistory is { IsCompleted: true })
             MergeHistory();
 
@@ -375,6 +376,25 @@ public sealed class Plugin : IDalamudPlugin
         var name = LocalName;
         if (name != mentionedName)
             RefreshMentions();
+    }
+
+    /// <summary>
+    /// La barre « Nouvelle connexion », au moment où le personnage arrive en jeu. Rien si le plugin démarre alors
+    /// qu'on joue déjà (mise à jour, rechargement) : ce n'est pas une connexion.
+    /// </summary>
+    private void AddSessionStartIfDue(ulong character)
+    {
+        sessionStartDue ??= character == 0;
+        if (character == 0 || sessionStartDue != true)
+            return;
+
+        sessionStartDue = false;
+        var line = ChatLine.SessionStart(DateTime.UtcNow);
+        Messages.Add(line);
+
+        // Pendant le chargement de l'historique, elle est écrite une fois celui-ci fusionné, comme les messages.
+        if (Configuration.KeepHistory && loadedCharacter != 0 && pendingHistory == null)
+            History.Enqueue(line);
     }
 
     private void UpdateFeeds()

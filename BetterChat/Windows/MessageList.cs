@@ -207,7 +207,7 @@ public sealed class MessageList
     }
 
     private float SeparatorsHeight(LineSeparators marks) =>
-        ((marks.NewMessages ? 1 : 0) + (marks.Day != null ? 1 : 0) + (marks.NewSession ? 1 : 0)) * SeparatorHeight;
+        ((marks.NewMessages ? 1 : 0) + (marks.Day != null ? 1 : 0)) * SeparatorHeight;
 
     /// <summary>En ouvrant un onglet, on reprend là où on s'était arrêté, si le repère ne tient pas déjà à l'écran.</summary>
     private void ScrollToNewMarker(ChatFeed feed, float viewHeight)
@@ -233,6 +233,9 @@ public sealed class MessageList
 
     private float LineHeightOf(ChatLine line, int index, bool header)
     {
+        if (line.Kind == ChatKind.SessionStart)
+            return SeparatorHeight;
+
         var layout = LayoutOf(line);
         var height = layout.Text.LineCount * lineHeight;
         var flows = index > 0 && !header && Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(line);
@@ -333,10 +336,10 @@ public sealed class MessageList
             top += SeparatorHeight;
         }
 
-        if (marks.NewSession)
+        if (line.Kind == ChatKind.SessionStart)
         {
-            DrawSeparator(drawList, origin.X, top, "Nouvelle connexion", Accent);
-            top += SeparatorHeight;
+            DrawSeparator(drawList, origin.X, top, line.BodyText, Cfg.SecondaryColor);
+            return;
         }
 
         if (marks.NewMessages)
