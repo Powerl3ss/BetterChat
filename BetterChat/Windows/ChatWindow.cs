@@ -236,12 +236,16 @@ public sealed partial class ChatWindow : Window, IDisposable
         var hovered = ImGui.IsItemHovered();
         var drawList = ImGui.GetWindowDrawList();
 
-        DrawIconBackdrop(min, min + new Vector2(size, size));
+        // Le dessin de l'icône est calé sur un pixel entier : les fonds se centrent sur lui, pas sur le bouton.
+        var center = ConfigWindow.IconVisualCenter(icon, min, min + new Vector2(size, size));
+        var half = new Vector2(size / 2f, size / 2f);
+
+        DrawIconBackdrop(center - half, center + half);
 
         if (active)
-            drawList.AddRectFilled(min, min + new Vector2(size, size), Col(Accent with { W = 0.20f }), 7f * S);
+            drawList.AddRectFilled(center - half, center + half, Col(Accent with { W = 0.20f }), 7f * S);
         else if (hovered)
-            drawList.AddRectFilled(min, min + new Vector2(size, size), Col(HoverOverlay), 7f * S);
+            drawList.AddRectFilled(center - half, center + half, Col(HoverOverlay), 7f * S);
 
         // Au repos, un gris plus clair quand le contraste est activé : il se détache mieux du décor.
         var idle = Cfg.TextOutline ? Vector4.Lerp(TextDim, TextMain, 0.6f) : TextDim;

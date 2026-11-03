@@ -84,28 +84,47 @@ public sealed partial class ConfigWindow
     /// Centre le dessin réel de l'icône : la boîte d'un caractère de police n'est pas centrée sur son dessin,
     /// ce qui décalait les icônes de un ou deux pixels dans leur bouton.
     /// </summary>
-    internal static unsafe void DrawIconCentered(FontAwesomeIcon icon, Vector2 min, Vector2 max, Vector4 color)
+    internal static void DrawIconCentered(FontAwesomeIcon icon, Vector2 min, Vector2 max, Vector4 color)
     {
-        var text = icon.ToIconString();
         using (ImRaii.PushFont(UiBuilder.IconFont))
         {
-            var center = (min + max) / 2f;
-            var font = ImGui.GetFont();
-            var glyph = font.FindGlyph((char)icon);
-
-            Vector2 pos;
-            if (glyph != null && font.FontSize > 0f)
-            {
-                var scale = ImGui.GetFontSize() / font.FontSize;
-                pos = center - new Vector2(glyph->X0 + glyph->X1, glyph->Y0 + glyph->Y1) * scale / 2f;
-            }
-            else
-            {
-                pos = center - ImGui.CalcTextSize(text) / 2f;
-            }
-
-            ImGui.GetWindowDrawList().AddText(new Vector2(MathF.Round(pos.X), MathF.Round(pos.Y)), Col(color), text);
+            var (position, _) = PlaceIcon(icon, min, max);
+            ImGui.GetWindowDrawList().AddText(position, Col(color), icon.ToIconString());
         }
+    }
+
+    /// <summary>Le centre réel du dessin de l'icône une fois placée : c'est sur lui qu'un fond doit se centrer.</summary>
+    internal static Vector2 IconVisualCenter(FontAwesomeIcon icon, Vector2 min, Vector2 max)
+    {
+        using (ImRaii.PushFont(UiBuilder.IconFont))
+        {
+            var (position, middle) = PlaceIcon(icon, min, max);
+            return position + middle;
+        }
+    }
+
+    /// <summary>
+    /// Position d'écriture de l'icône (sur un pixel entier, pour rester nette) et milieu de son dessin par rapport à
+    /// cette position. La police des icônes doit être active.
+    /// </summary>
+    private static unsafe (Vector2 Position, Vector2 Middle) PlaceIcon(FontAwesomeIcon icon, Vector2 min, Vector2 max)
+    {
+        var font = ImGui.GetFont();
+        var glyph = font.FindGlyph((char)icon);
+
+        Vector2 middle;
+        if (glyph != null && font.FontSize > 0f)
+        {
+            var scale = ImGui.GetFontSize() / font.FontSize;
+            middle = new Vector2(glyph->X0 + glyph->X1, glyph->Y0 + glyph->Y1) * scale / 2f;
+        }
+        else
+        {
+            middle = ImGui.CalcTextSize(icon.ToIconString()) / 2f;
+        }
+
+        var position = (min + max) / 2f - middle;
+        return (new Vector2(MathF.Round(position.X), MathF.Round(position.Y)), middle);
     }
 
     /// <summary>Icône + texte centrés dans un rectangle.</summary>
