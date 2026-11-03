@@ -202,6 +202,29 @@ public sealed partial class ChatWindow : Window, IDisposable
 
     private static uint Col(Vector4 color) => ImGui.GetColorU32(color);
 
+    /// <summary>Icône avec le même contour que le texte : elle reste lisible sans fond.</summary>
+    private void DrawOutlinedIcon(FontAwesomeIcon icon, Vector2 min, Vector2 max, Vector4 color)
+    {
+        if (Cfg.TextOutline && Cfg.OutlineStrength > 0f)
+        {
+            var shadow = new Vector4(0f, 0f, 0f, Math.Clamp(Cfg.OutlineStrength, 0f, 1f) * color.W);
+            var t = MathF.Max(1f, S);
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                for (var dy = -1; dy <= 1; dy++)
+                {
+                    if (dx != 0 || dy != 0)
+                    {
+                        var offset = new Vector2(dx * t, dy * t);
+                        ConfigWindow.DrawIconCentered(icon, min + offset, max + offset, shadow);
+                    }
+                }
+            }
+        }
+
+        ConfigWindow.DrawIconCentered(icon, min, max, color);
+    }
+
     private bool IconButton(string id, FontAwesomeIcon icon, float size, string? tooltip, bool active = false)
     {
         var min = ImGui.GetCursorScreenPos();
@@ -214,7 +237,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         else if (hovered)
             drawList.AddRectFilled(min, min + new Vector2(size, size), Col(HoverOverlay), 7f * S);
 
-        ConfigWindow.DrawIconCentered(icon, min, min + new Vector2(size, size), active ? Accent : hovered ? TextMain : TextDim);
+        DrawOutlinedIcon(icon, min, min + new Vector2(size, size), active ? Accent : hovered ? TextMain : TextDim);
 
         if (tooltip != null && hovered)
             ImGui.SetTooltip(tooltip);
