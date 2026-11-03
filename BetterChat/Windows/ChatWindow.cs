@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
@@ -72,7 +73,24 @@ public sealed partial class ChatWindow : Window, IDisposable
     /// <summary>Vrai si la fenêtre a été dessinée à l'instant : sinon, seule la zone de saisie du jeu peut servir.</summary>
     public bool IsShownNow => IsOpen && (DateTime.UtcNow - lastDraw).TotalSeconds < 0.5;
 
-    public override bool DrawConditions() => Plugin.CurrentCharacterId != 0;
+    /// <summary>Écran de chargement ou cinématique : le chat s'efface, comme le reste de l'interface du jeu.</summary>
+    public static bool HiddenByGame =>
+        Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] ||
+        Plugin.Condition[ConditionFlag.WatchingCutscene] ||
+        Plugin.Condition[ConditionFlag.WatchingCutscene78] ||
+        Plugin.Condition[ConditionFlag.BetweenAreas] ||
+        Plugin.Condition[ConditionFlag.BetweenAreas51];
+
+    public override bool DrawConditions()
+    {
+        if (Plugin.CurrentCharacterId != 0 && !HiddenByGame)
+            return true;
+
+        // La zone de saisie disparaît avec la fenêtre. Le texte en cours reste, mais elle ne reprendra pas le focus seule.
+        inputActive = false;
+        focusRequested = false;
+        return false;
+    }
 
     public override void PreDraw()
     {

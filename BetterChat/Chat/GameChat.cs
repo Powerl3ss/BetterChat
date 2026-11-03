@@ -59,6 +59,9 @@ public sealed unsafe class GameChat : IDisposable
     /// <summary>Le plugin peut-il prendre le focus maintenant ? Sinon le jeu garde la main.</summary>
     public Func<bool>? CanTakeActivation { get; set; }
 
+    /// <summary>Faut-il ignorer la touche du chat tant que le plugin ne peut pas prendre le focus ?</summary>
+    public Func<bool>? BlockActivation { get; set; }
+
     /// <summary>Nombre de fois où la touche du chat a été interceptée (diagnostic).</summary>
     public int Activations { get; private set; }
 
@@ -189,8 +192,16 @@ public sealed unsafe class GameChat : IDisposable
             return;
 
         var values = (AtkValue*)refresh.AtkValues;
-        if (!IsActivation(refresh.AtkValueCount, values) || !(CanTakeActivation?.Invoke() ?? false))
+        if (!IsActivation(refresh.AtkValueCount, values))
             return;
+
+        if (!(CanTakeActivation?.Invoke() ?? false))
+        {
+            // Aucun chat à l'écran : le jeu donnerait le focus à sa saisie masquée, et le clavier écrirait dans le vide.
+            if (nativeHidden && (BlockActivation?.Invoke() ?? false))
+                args.PreventOriginal();
+            return;
+        }
 
         args.PreventOriginal();
         Activations++;

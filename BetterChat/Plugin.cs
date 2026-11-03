@@ -21,6 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static ICondition Condition { get; private set; } = null!;
     [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
@@ -115,7 +116,8 @@ public sealed class Plugin : IDalamudPlugin
         WindowSystem.AddWindow(configWindow);
 
         Game.Activated += chatWindow.OnGameActivated;
-        Game.CanTakeActivation = () => chatWindow.IsShownNow;
+        Game.CanTakeActivation = () => chatWindow.IsShownNow && !ChatWindow.HiddenByGame;
+        Game.BlockActivation = () => ChatWindow.HiddenByGame;
 
         var commandInfo = new CommandInfo(OnCommand)
         {
@@ -144,6 +146,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Game.Activated -= chatWindow.OnGameActivated;
         Game.CanTakeActivation = null;
+        Game.BlockActivation = null;
         Game.Dispose(); // rend le chat du jeu
 
         WindowSystem.RemoveAllWindows();
