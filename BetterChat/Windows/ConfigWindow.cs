@@ -725,7 +725,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     using (ImRaii.Disabled(!Cfg.TextOutline))
                         changed |= SliderRow("Intensité du contour", null, Cfg.OutlineStrength, 0.1f, 1f, "%.2f", v => Cfg.OutlineStrength = v);
                     changed |= SliderRow("Taille du texte", null, Cfg.FontSize, 10f, 36f, "%.0f", v => Cfg.FontSize = MathF.Round(v));
-                    changed |= ToggleRow("Icônes de job", "À côté du nom des membres du groupe et des joueurs à proximité.", Cfg.ShowJobIcons, v => Cfg.ShowJobIcons = v);
+                    changed |= ToggleRow("Icônes de job", "À côté du nom des joueurs dont le jeu connaît le job : groupe, proximité, compagnie libre, amis, linkshells.", Cfg.ShowJobIcons, v => Cfg.ShowJobIcons = v);
                     using (ImRaii.Disabled(!Cfg.ShowJobIcons))
                         changed |= SliderRow("Taille des icônes de job", "Par rapport à la hauteur du texte.", Cfg.JobIconHeight, 60f, 150f, "%.0f %%", v => Cfg.JobIconHeight = MathF.Round(v));
                     changed |= ToggleRow("Séparateurs", "Une ligne à chaque reconnexion, et une autre quand la date change.", Cfg.ShowSeparators, v => Cfg.ShowSeparators = v);

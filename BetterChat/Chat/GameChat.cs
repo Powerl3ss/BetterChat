@@ -408,6 +408,36 @@ public sealed unsafe class GameChat : IDisposable
         }
     }
 
+    /// <summary>
+    /// Le job d'un joueur d'après les listes que le jeu garde déjà en mémoire : compagnie libre, amis, linkshells.
+    /// Lecture seule : rien n'est demandé au serveur, une liste vide tant que le jeu ne l'a pas chargée est ignorée.
+    /// </summary>
+    public static unsafe uint JobFromSocialLists(string name)
+    {
+        var job = JobInList((InfoProxyCommonList*)InfoProxyFreeCompanyMember.Instance(), name);
+        if (job == 0)
+            job = JobInList((InfoProxyCommonList*)InfoProxyFriendList.Instance(), name);
+        if (job == 0)
+            job = JobInList((InfoProxyCommonList*)InfoProxyLinkshellMember.Instance(), name);
+        if (job == 0)
+            job = JobInList((InfoProxyCommonList*)InfoProxyCrossWorldLinkshellMember.Instance(), name);
+        return job;
+    }
+
+    private static unsafe uint JobInList(InfoProxyCommonList* list, string name)
+    {
+        if (list == null || list->CharData == null)
+            return 0;
+
+        foreach (ref readonly var member in list->CharDataSpan)
+        {
+            if (member.Job != 0 && member.NameString == name)
+                return member.Job;
+        }
+
+        return 0;
+    }
+
     /// <summary>L'objet se fabrique-t-il ? La feuille du jeu a une ligne par objet, avec sa recette pour chaque artisan.</summary>
     public static bool HasRecipe(uint itemId)
     {

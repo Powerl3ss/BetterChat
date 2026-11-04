@@ -24,7 +24,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Recherche dans l'onglet affiché (Ctrl + F), par mot, joueur, canal ou date : `de:Jean canal:CL date:hier`.
 - Noms, objets, cartes, quêtes, effets, annonces de recherche de groupe et adresses web cliquables. Survoler un objet, une quête ou un effet montre ses détails, et le clic droit sur un objet ouvre son craft s'il en a un. Une adresse s'affiche en entier avant de s'ouvrir.
 - Une ligne à chaque reconnexion, et une autre quand la date change.
-- L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
+- L'icône de job à côté des joueurs dont le jeu connaît le job (groupe, proximité, compagnie libre, amis, linkshells), et une couleur au choix pour repérer tes amis.
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
 - Export d'une conversation dans un fichier texte (clic droit sur l'onglet).
 - Les icônes du jeu dans les messages, et la sélection de texte à la souris (Ctrl + C ou clic droit pour copier).
