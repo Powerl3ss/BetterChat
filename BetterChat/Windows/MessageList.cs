@@ -843,7 +843,6 @@ public sealed class MessageList
         Tip.Title(item.Value.Name.ExtractText());
         if (item.Value.LevelItem.RowId > 1)
             Tip.Note($"Niveau d'objet {item.Value.LevelItem.RowId}");
-        Tip.Hint("Clic : copier, lier dans le chat");
         ImGui.EndGroup();
     }
 
@@ -947,6 +946,8 @@ public sealed class MessageList
                     var name = ItemName(contextLink.Id);
                     Tip.MenuTitle(name);
                     Tip.MenuSeparator();
+                    if (GameChat.HasRecipe(contextLink.Id) && Tip.MenuItem("Voir le craft", FontAwesomeIcon.Hammer))
+                        GameChat.OpenRecipe(contextLink.Id);
                     if (Tip.MenuItem("Lier dans le chat", FontAwesomeIcon.Link))
                     {
                         GameChat.LinkItem(contextLink.Id);

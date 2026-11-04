@@ -22,7 +22,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Onglets à ta façon : chacun choisit ses canaux. Pastille de messages non lus, rouge pour une mention ou un message privé.
 - Onglets détachables : sors un onglet dans sa propre fenêtre avec sa zone de saisie et son propre verrou, par exemple le combat ou la compagnie libre dans un coin de l'écran.
 - Recherche dans l'onglet affiché (Ctrl + F), par mot, joueur, canal ou date : `de:Jean canal:CL date:hier`.
-- Noms, objets, cartes, quêtes, effets, annonces de recherche de groupe et adresses web cliquables. Survoler un objet, une quête ou un effet montre ses détails. Une adresse s'affiche en entier avant de s'ouvrir.
+- Noms, objets, cartes, quêtes, effets, annonces de recherche de groupe et adresses web cliquables. Survoler un objet, une quête ou un effet montre ses détails, et le clic droit sur un objet ouvre son craft s'il en a un. Une adresse s'affiche en entier avant de s'ouvrir.
 - Une ligne à chaque reconnexion, et une autre quand la date change.
 - L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».

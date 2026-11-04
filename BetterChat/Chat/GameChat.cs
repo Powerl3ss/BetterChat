@@ -408,6 +408,26 @@ public sealed unsafe class GameChat : IDisposable
         }
     }
 
+    /// <summary>L'objet se fabrique-t-il ? La feuille du jeu a une ligne par objet, avec sa recette pour chaque artisan.</summary>
+    public static bool HasRecipe(uint itemId)
+    {
+        var row = Plugin.DataManager.GetExcelSheet<RecipeLookup>().GetRowOrDefault(itemId);
+        return row is { } recipes &&
+               (recipes.CRP.RowId != 0 || recipes.BSM.RowId != 0 || recipes.ARM.RowId != 0 || recipes.GSM.RowId != 0 ||
+                recipes.LTW.RowId != 0 || recipes.WVR.RowId != 0 || recipes.ALC.RowId != 0 || recipes.CUL.RowId != 0);
+    }
+
+    /// <summary>Ouvre le carnet d'artisanat du jeu sur la recette de cet objet.</summary>
+    public static void OpenRecipe(uint itemId)
+    {
+        unsafe
+        {
+            var agent = AgentRecipeNote.Instance();
+            if (agent != null)
+                agent->SearchRecipeByItemId(itemId, 0);
+        }
+    }
+
     /// <summary>Dernier objet lié depuis le chat, pour montrer ce que deviendra &lt;item&gt;.</summary>
     public static uint LastLinkedItem { get; private set; }
 
