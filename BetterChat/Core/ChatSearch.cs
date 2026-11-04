@@ -255,7 +255,7 @@ public static class ChatExporter
             builder.Append(line.TimeUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture));
             builder.Append(" [").Append(ChatKinds.Info(line.Kind).Tag).Append("] ");
 
-            var sender = Clean(line.SenderText);
+            var sender = line.ShowsSender ? Clean(line.SenderText) : string.Empty;
             if (sender.Length > 0)
                 builder.Append(sender).Append(ChatGrouping.Separator(line.Kind));
 

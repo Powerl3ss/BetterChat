@@ -125,9 +125,16 @@ public sealed class ChatLine
     [JsonIgnore]
     public string AuthorKey => Author != null ? Author.Text : SenderText;
 
+    /// <summary>
+    /// Le nom s'affiche-t-il devant le texte ? Pas pour une emote : le jeu en donne une phrase complète
+    /// (« Jean s'esclaffe. », « Vous vous esclaffez. »), et le nom y serait deux fois.
+    /// </summary>
+    [JsonIgnore]
+    public bool ShowsSender => SenderText.Length > 0 && Kind != ChatKind.StandardEmote;
+
     /// <summary>Le message tel qu'on le copie : « Nom : texte ».</summary>
     [JsonIgnore]
-    public string CopyText => GameIcons.Strip(SenderText.Length > 0 ? $"{SenderText}: {BodyText}" : BodyText);
+    public string CopyText => GameIcons.Strip(ShowsSender ? $"{SenderText}: {BodyText}" : BodyText);
 
     /// <summary>Nom et texte sans majuscules ni accents, pour la recherche.</summary>
     [JsonIgnore]

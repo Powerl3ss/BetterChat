@@ -254,7 +254,7 @@ public sealed class MessageList
         if (Cfg.ShowChannelTags && Cfg.Style == ChatStyle.Compact)
             spans.Add(new ChatSpan($"[{ChatKinds.Info(line.Kind).Tag}] "));
 
-        if (line.Sender.Count > 0 && line.SenderText.Length > 0)
+        if (line.ShowsSender)
         {
             // L'icône de job n'est pas du texte : des espaces lui réservent sa place juste avant le nom.
             if (HasJobIcon(line))

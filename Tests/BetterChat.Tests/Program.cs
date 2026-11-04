@@ -38,6 +38,7 @@ var tests = new (string Name, Action Run)[]
     ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
+    ("Emote : le nom n'est pas répété", Tests.EmoteDoesNotRepeatName),
     ("Icônes du jeu : aller-retour dans le texte", Tests.GameIconsInText),
     ("Icônes du jeu : retirées du texte copié et de la recherche", Tests.GameIconsNotCopied),
     ("Icônes du jeu : lecture de la table", Tests.GameIconTableParsed),
@@ -571,6 +572,17 @@ internal static class Tests
         Same(null, LineSeparators.Between(second, third, Today).Day, "même jour");
         Same(Today.AddDays(-1), LineSeparators.Between(null, first, Today).Day, "premier message d'un autre jour");
         Same(null, LineSeparators.Between(null, second, Today).Day, "premier message du jour");
+    }
+
+    public static void EmoteDoesNotRepeatName()
+    {
+        var emote = Line(ChatKind.StandardEmote, "Jean s'esclaffe.", "Jean");
+        Check(!emote.ShowsSender, "phrase complète");
+        Same("Jean s'esclaffe.", emote.CopyText, "copie");
+        Check(ChatExporter.Format(new[] { emote }, _ => 1).EndsWith("] Jean s'esclaffe.\n"), "export");
+
+        Check(Line(ChatKind.CustomEmote, "danse.", "Jean").ShowsSender, "une emote écrite garde le nom");
+        Check(Line(ChatKind.Say, "salut", "Jean").ShowsSender, "un message aussi");
     }
 
     public static void GameIconsInText()
