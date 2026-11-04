@@ -29,6 +29,7 @@ public sealed class MessageList
     private const float ListPaddingTop = 8f;
     private const float ListPaddingBottom = 6f;
     private const int WidthCacheLimit = 20000;
+    private const float SelectionScrollSpeed = 320f;
 
     // Les icônes de job du jeu se suivent à partir de ce numéro, dans l'ordre de la feuille ClassJob.
     private const uint JobIconBase = 62000;
@@ -78,6 +79,12 @@ public sealed class MessageList
     private ChatLink? contextLink;
     private ChatLink? pendingUrl;
     private string colorPlayer = string.Empty;
+
+    // Sélection à la souris : du point où le bouton a été enfoncé jusqu'au curseur.
+    private readonly record struct TextPos(long LineId, int Offset);
+    private TextPos selectionAnchor;
+    private TextPos selectionEnd;
+    private bool selecting;
     private bool openPlayerColor;
 
     private readonly Plugin plugin;
@@ -134,12 +141,17 @@ public sealed class MessageList
         for (var i = stack.FirstVisible(visibleTop); i < stack.Count && stack.Top(i) < visibleBottom; i++)
             DrawLine(feed, feed.Visible[i], i, origin, size.X, hoverable);
 
-        // Le curseur main quand on survole un lien.
+        UpdateSelection(feed, origin, size, hoverable);
+
+        // Le curseur main quand on survole un lien, le curseur de texte sur ce qui se sélectionne.
         if (hoveredLink != null)
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+        else if (selecting || (hoverable && IsOverText(feed, origin, ImGui.GetMousePos())))
+            ImGui.SetMouseCursor(ImGuiMouseCursor.TextInput);
 
-        DrawLinePopups();
+        DrawLinePopups(feed);
         UpdateScrolling(feed, size);
+        ScrollWhileSelecting(size);
     }
 
     private float ContentHeight => stack.Total + (ListPaddingTop + ListPaddingBottom) * S;
@@ -176,6 +188,7 @@ public sealed class MessageList
             stack.Clear();
             headers.Clear();
             separators.Clear();
+            ClearSelection();
             lastCountForUnseen = feed.Visible.Count;
             unseenBelow = 0;
         }
@@ -283,8 +296,28 @@ public sealed class MessageList
         if (widths.TryGetValue(text, out var width))
             return width;
 
-        width = ImGui.CalcTextSize(text).X;
+        width = GameIcons.Contains(text) ? MeasureWithIcons(text, fontPx) : ImGui.CalcTextSize(text).X;
         widths[text] = width;
+        return width;
+    }
+
+    private float MeasureWithIcons(string text, float fontPx)
+    {
+        var width = 0f;
+        var start = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (!GameIcons.IsIcon(text[i]))
+                continue;
+
+            if (i > start)
+                width += ImGui.CalcTextSize(text[start..i]).X;
+            width += plugin.Icons.WidthOf(GameIcons.IdOf(text[i]), fontPx);
+            start = i + 1;
+        }
+
+        if (start < text.Length)
+            width += ImGui.CalcTextSize(text[start..]).X;
         return width;
     }
 
@@ -498,8 +531,20 @@ public sealed class MessageList
     private void DrawRuns(ChatLine line, LineLayout layout, Vector2 pos, Vector4 channel, bool hoverable)
     {
         var drawList = ImGui.GetWindowDrawList();
+        var (selectionStart, selectionStop) = SelectionIn(line);
+        var offset = 0;
         foreach (var run in layout.Text.Runs)
         {
+            // Le fond de la sélection passe sous le texte.
+            if (selectionStart < selectionStop &&
+                TextSelection.Highlight(run, offset, selectionStart, selectionStop, Measure) is { } highlight)
+            {
+                var rowTop = pos.Y + run.Line * lineHeight;
+                drawList.AddRectFilled(new Vector2(pos.X + highlight.Left, rowTop), new Vector2(pos.X + highlight.Right, rowTop + lineHeight), Col(Accent with { W = 0.38f }));
+            }
+
+            offset += run.Text.Length;
+
             if (run.SpanIndex == layout.IconSpan)
             {
                 DrawJobIcon(drawList, line.AuthorJob, pos + new Vector2(run.X, run.Line * lineHeight));
@@ -517,7 +562,7 @@ public sealed class MessageList
 
     private void DrawRun(ImDrawListPtr drawList, Vector2 pos, string text, float width, Vector4 color, ChatLink? link, bool hoverable)
     {
-        DrawOutlinedText(drawList, pos, color, text);
+        DrawTextWithIcons(drawList, pos, color, text);
 
         if (link == null)
             return;
@@ -532,6 +577,39 @@ public sealed class MessageList
         // Les liens web sont toujours soulignés. Les autres, seulement au survol (sur tous leurs morceaux).
         if (link.Kind == LinkKind.Url || ReferenceEquals(link, hoveredLinkLastFrame) || ReferenceEquals(link, hoveredLink))
             drawList.AddLine(new Vector2(pos.X, max.Y - 1f), new Vector2(max.X, max.Y - 1f), Col(color));
+    }
+
+    /// <summary>Le texte coupé autour de ses icônes, chacune dessinée à sa place.</summary>
+    private void DrawTextWithIcons(ImDrawListPtr drawList, Vector2 pos, Vector4 color, string text)
+    {
+        if (!GameIcons.Contains(text))
+        {
+            DrawOutlinedText(drawList, pos, color, text);
+            return;
+        }
+
+        var x = pos.X;
+        var start = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (!GameIcons.IsIcon(text[i]))
+                continue;
+
+            if (i > start)
+            {
+                var part = text[start..i];
+                DrawOutlinedText(drawList, new Vector2(x, pos.Y), color, part);
+                x += Measure(part);
+            }
+
+            var icon = GameIcons.IdOf(text[i]);
+            plugin.Icons.Draw(drawList, icon, new Vector2(x, pos.Y), lineHeight, color.W);
+            x += plugin.Icons.WidthOf(icon, lineHeight);
+            start = i + 1;
+        }
+
+        if (start < text.Length)
+            DrawOutlinedText(drawList, new Vector2(x, pos.Y), color, text[start..]);
     }
 
     /// <summary>Texte avec un contour : 8 copies sombres décalées, dessinées dessous. Il reste lisible sans fond.</summary>
@@ -552,6 +630,133 @@ public sealed class MessageList
         }
 
         drawList.AddText(pos, Col(color), text);
+    }
+
+    // ------------------------------------------------------------ Sélection à la souris
+
+    private bool HasSelection => selectionAnchor != selectionEnd;
+
+    private void ClearSelection()
+    {
+        selecting = false;
+        selectionAnchor = default;
+        selectionEnd = default;
+    }
+
+    private (TextPos First, TextPos Last) OrderedSelection()
+    {
+        var anchorFirst = selectionAnchor.LineId < selectionEnd.LineId ||
+                          (selectionAnchor.LineId == selectionEnd.LineId && selectionAnchor.Offset <= selectionEnd.Offset);
+        return anchorFirst ? (selectionAnchor, selectionEnd) : (selectionEnd, selectionAnchor);
+    }
+
+    /// <summary>La partie sélectionnée d'un message, en caractères. Vide (0, 0) s'il n'en a pas.</summary>
+    private (int Start, int End) SelectionIn(ChatLine line)
+    {
+        if (!HasSelection)
+            return (0, 0);
+
+        var (first, last) = OrderedSelection();
+        if (line.Id < first.LineId || line.Id > last.LineId)
+            return (0, 0);
+
+        return (line.Id == first.LineId ? first.Offset : 0, line.Id == last.LineId ? last.Offset : int.MaxValue);
+    }
+
+    /// <summary>Haut du texte d'un message dans la liste, sous ses séparateurs et son en-tête.</summary>
+    private float BodyTop(int index) =>
+        stack.Top(index) + SeparatorsHeight(separators[index]) + (headers[index] ? 9f * S + lineHeight : 0f);
+
+    private TextPos PositionAt(ChatFeed feed, Vector2 origin, Vector2 mouse)
+    {
+        var index = Math.Clamp(stack.FirstVisible(mouse.Y - origin.Y), 0, stack.Count - 1);
+        var line = feed.Visible[index];
+        var textTop = origin.Y + BodyTop(index);
+        if (line.Kind == ChatKind.SessionStart || mouse.Y < textTop)
+            return new TextPos(line.Id, 0);
+
+        var row = (int)MathF.Floor((mouse.Y - textTop) / lineHeight);
+        return new TextPos(line.Id, TextSelection.OffsetAt(LayoutOf(line).Text, row, mouse.X - origin.X - textLeft - timeColumn, Measure));
+    }
+
+    private bool IsOverText(ChatFeed feed, Vector2 origin, Vector2 mouse)
+    {
+        var index = Math.Clamp(stack.FirstVisible(mouse.Y - origin.Y), 0, stack.Count - 1);
+        var line = feed.Visible[index];
+        var textTop = origin.Y + BodyTop(index);
+        if (line.Kind == ChatKind.SessionStart || mouse.Y < textTop)
+            return false;
+
+        var row = (int)MathF.Floor((mouse.Y - textTop) / lineHeight);
+        var x = mouse.X - origin.X - textLeft - timeColumn;
+        foreach (var run in LayoutOf(line).Text.Runs)
+        {
+            if (run.Line == row && x >= run.X && x <= run.X + run.Width)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void UpdateSelection(ChatFeed feed, Vector2 origin, Vector2 size, bool hoverable)
+    {
+        var mouse = ImGui.GetMousePos();
+        var listTop = ImGui.GetWindowPos().Y;
+        var overList = hoverable && hoveredLink == null && mouse.X < ImGui.GetWindowPos().X + size.X - ImGui.GetStyle().ScrollbarSize;
+
+        if (overList && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        {
+            selectionAnchor = PositionAt(feed, origin, mouse);
+            selectionEnd = selectionAnchor;
+            selecting = true;
+        }
+        else if (selecting)
+        {
+            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                selectionEnd = PositionAt(feed, origin, mouse with { Y = Math.Clamp(mouse.Y, listTop, listTop + size.Y) });
+            else
+                selecting = false;
+        }
+
+        if (HasSelection && !selecting && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            !ImGui.GetIO().WantTextInput && ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.C, false))
+            ImGui.SetClipboardText(SelectedText(feed));
+    }
+
+    /// <summary>Le curseur dépasse de la liste pendant la sélection : elle défile pour aller plus loin.</summary>
+    private void ScrollWhileSelecting(Vector2 size)
+    {
+        if (!selecting)
+            return;
+
+        var mouseY = ImGui.GetMousePos().Y;
+        var listTop = ImGui.GetWindowPos().Y;
+        var direction = mouseY < listTop ? -1f : mouseY > listTop + size.Y ? 1f : 0f;
+        if (direction != 0f)
+            ImGui.SetScrollY(ImGui.GetScrollY() + direction * SelectionScrollSpeed * S * Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f));
+    }
+
+    /// <summary>Le texte sélectionné, avec un retour à la ligne entre deux messages.</summary>
+    private string SelectedText(ChatFeed feed)
+    {
+        var builder = new System.Text.StringBuilder();
+        foreach (var line in feed.Visible)
+        {
+            var (start, end) = SelectionIn(line);
+            if (start >= end || line.Kind == ChatKind.SessionStart)
+                continue;
+
+            var layout = LayoutOf(line);
+            var piece = TextSelection.Extract(layout.Text, start, end, layout.IconSpan);
+            if (piece.Length == 0)
+                continue;
+
+            if (builder.Length > 0)
+                builder.Append('\n');
+            builder.Append(piece);
+        }
+
+        return builder.ToString();
     }
 
     // ------------------------------------------------------------ Liens
@@ -702,12 +907,15 @@ public sealed class MessageList
         Plugin.GameGui.OpenMapWithMapLink(payload);
     }
 
-    private void DrawLinePopups()
+    private void DrawLinePopups(ChatFeed feed)
     {
         if (Tip.BeginMenu("##lineMenu"))
         {
             if (contextLine is { } line)
             {
+                if (HasSelection && Tip.MenuItem("Copier la sélection", FontAwesomeIcon.Clipboard, "Ctrl + C"))
+                    ImGui.SetClipboardText(SelectedText(feed));
+
                 if (line.Author != null && line.Author.Text != plugin.LocalName)
                 {
                     Tip.MenuTitle(line.Author.TellTarget);

@@ -119,6 +119,8 @@ internal static class MessageConverter
                     // L'icône des mondes sépare « Nom » et « Monde » : sans elle, les deux se colleraient.
                     if (icon.Icon == BitmapFontIcon.CrossWorld)
                         current.Append('@');
+                    else if (GameIcons.ToChar((uint)icon.Icon) is { } iconChar)
+                        current.Append(iconChar);
                     break;
 
                 case ITextProvider provider:

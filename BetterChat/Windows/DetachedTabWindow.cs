@@ -116,7 +116,8 @@ public sealed class DetachedTabWindow : Window
         var drawList = ImGui.GetWindowDrawList();
         var origin = ImGui.GetWindowPos();
         var iconSize = IconButtonSize;
-        var buttonX = RightButtonX(size.X, FontAwesomeIcon.SignInAlt, iconSize);
+        var pinX = RightButtonX(size.X, FontAwesomeIcon.Thumbtack, iconSize);
+        var buttonX = pinX - iconSize - 2f * S;
 
         var textPos = origin + new Vector2(EdgeMargin * S, MathF.Floor((height - ImGui.GetTextLineHeight()) / 2f));
         drawList.PushClipRect(origin, origin + new Vector2(buttonX - 4f * S, height), true);
@@ -132,6 +133,13 @@ public sealed class DetachedTabWindow : Window
         ImGui.SetCursorPos(new Vector2(buttonX, MathF.Round((height - iconSize) / 2f)));
         if (chat.IconButton("##reattach", FontAwesomeIcon.SignInAlt, iconSize, "Remettre dans le chat\nClic droit sur l'en-tête : ses options"))
             plugin.SetDetached(Tab, false);
+
+        ImGui.SetCursorPos(new Vector2(pinX, MathF.Round((height - iconSize) / 2f)));
+        if (chat.IconButton("##pin", FontAwesomeIcon.Thumbtack, iconSize, Tab.Locked ? "Position verrouillée\nClic : déverrouiller" : "Verrouiller la position", Tab.Locked))
+        {
+            Tab.Locked = !Tab.Locked;
+            Cfg.Save();
+        }
 
         if (Tip.BeginMenu("##detachedMenu"))
         {

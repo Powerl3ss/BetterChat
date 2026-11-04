@@ -38,6 +38,12 @@ var tests = new (string Name, Action Run)[]
     ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
+    ("Icônes du jeu : aller-retour dans le texte", Tests.GameIconsInText),
+    ("Icônes du jeu : retirées du texte copié et de la recherche", Tests.GameIconsNotCopied),
+    ("Icônes du jeu : lecture de la table", Tests.GameIconTableParsed),
+    ("Sélection : position sous la souris", Tests.SelectionOffset),
+    ("Sélection : texte extrait, sur plusieurs lignes", Tests.SelectionExtract),
+    ("Sélection : surlignage d'un bout de texte", Tests.SelectionHighlight),
     ("Icône : le dessin est trouvé, sans les marges ni l'ombre", Tests.IconInkFound),
     ("Icône : image vide ou illisible, l'image entière sert", Tests.IconInkFallback),
     ("Connexion : la barre apparaît tout de suite, dans tous les onglets", Tests.SessionBarInEveryTab),
@@ -567,6 +573,95 @@ internal static class Tests
         Same(null, LineSeparators.Between(null, second, Today).Day, "premier message du jour");
     }
 
+    public static void GameIconsInText()
+    {
+        var icon = GameIcons.ToChar(84)!.Value;
+        Check(GameIcons.IsIcon(icon), "reconnue");
+        Same(84u, GameIcons.IdOf(icon), "son numéro");
+        Same(null, GameIcons.ToChar(0), "aucune icône");
+        Same(null, GameIcons.ToChar(100000), "numéro hors plage");
+        Check(!GameIcons.IsIcon('\uE090'), "les symboles du jeu restent du texte");
+        Same("ab", GameIcons.Strip($"a{icon}b"), "retirée");
+    }
+
+    public static void GameIconsNotCopied()
+    {
+        var icon = GameIcons.ToChar(84)!.Value;
+        var line = Line(ChatKind.Say, $"bon{icon}jour", "Jean");
+
+        Same("Jean: bonjour", line.CopyText, "copie");
+        Check(line.FoldedText.Contains("bonjour"), "recherche");
+    }
+
+    public static void GameIconTableParsed()
+    {
+        var file = new byte[16 + 16 * 3];
+        BitConverter.TryWriteBytes(file.AsSpan(8), 3);
+
+        void Entry(int index, ushort id, ushort left, ushort top, ushort width, ushort height, ushort redirect)
+        {
+            var at = 16 + index * 16;
+            BitConverter.TryWriteBytes(file.AsSpan(at), id);
+            BitConverter.TryWriteBytes(file.AsSpan(at + 2), left);
+            BitConverter.TryWriteBytes(file.AsSpan(at + 4), top);
+            BitConverter.TryWriteBytes(file.AsSpan(at + 6), width);
+            BitConverter.TryWriteBytes(file.AsSpan(at + 8), height);
+            BitConverter.TryWriteBytes(file.AsSpan(at + 12), redirect);
+        }
+
+        Entry(0, 84, 10, 20, 30, 40, 0);
+        Entry(1, 85, 0, 0, 0, 0, 0);
+        Entry(2, 86, 0, 0, 0, 0, 84);
+
+        var table = GameIconTable.Parse(file);
+        Check(table.TryGet(84, out var entry), "trouvée");
+        Same(new GameIconEntry(10, 20, 30, 40), entry, "valeurs");
+        Check(!table.TryGet(85, out _), "icône vide ignorée");
+        Check(table.TryGet(86, out var redirected) && redirected == entry, "renvoi suivi");
+        Check(!GameIconTable.Parse(new byte[3]).TryGet(84, out _), "fichier trop court");
+    }
+
+    // Deux lignes : « abcd » à partir de x = 0, puis « ef » à partir de x = 20. Chaque caractère fait 10 de large.
+    private static LaidOutText TwoLines() => new(new List<TextRun>
+    {
+        new(0, "abcd", 0f, 0, 40f),
+        new(1, "ef", 20f, 1, 20f),
+    }, 2);
+
+    public static void SelectionOffset()
+    {
+        var text = TwoLines();
+        Same(0, TextSelection.OffsetAt(text, 0, -5f, Measure), "avant le texte");
+        Same(1, TextSelection.OffsetAt(text, 0, 12f, Measure), "au plus près : avant le 2e caractère");
+        Same(2, TextSelection.OffsetAt(text, 0, 16f, Measure), "au plus près : après le 2e caractère");
+        Same(4, TextSelection.OffsetAt(text, 0, 90f, Measure), "fin de ligne");
+        Same(4, TextSelection.OffsetAt(text, 1, 0f, Measure), "avant le début de la 2e ligne");
+        Same(5, TextSelection.OffsetAt(text, 1, 31f, Measure), "dans la 2e ligne");
+        Same(6, TextSelection.OffsetAt(text, 7, 0f, Measure), "sous le texte");
+    }
+
+    public static void SelectionExtract()
+    {
+        var text = TwoLines();
+        Same("bcde", TextSelection.Extract(text, 1, 5), "à cheval sur deux lignes");
+        Same("abcdef", TextSelection.Extract(text, 0, int.MaxValue), "tout");
+        Same("ef", TextSelection.Extract(text, 0, 6, skipSpan: 0), "place de l'icône ignorée");
+        Same("", TextSelection.Extract(text, 2, 2), "rien");
+
+        var icon = GameIcons.ToChar(84)!.Value;
+        var withIcon = new LaidOutText(new List<TextRun> { new(0, $"a{icon}b", 0f, 0, 30f) }, 1);
+        Same("ab", TextSelection.Extract(withIcon, 0, 3), "sans l'icône");
+    }
+
+    public static void SelectionHighlight()
+    {
+        var run = new TextRun(0, "abcd", 5f, 0, 40f);
+        Same((15f, 35f), TextSelection.Highlight(run, 100, 101, 103, Measure)!.Value, "au milieu");
+        Same((5f, 45f), TextSelection.Highlight(run, 100, 0, int.MaxValue, Measure)!.Value, "entier");
+        Same(null, TextSelection.Highlight(run, 100, 104, 200, Measure), "après");
+        Same(null, TextSelection.Highlight(run, 100, 0, 100, Measure), "avant");
+    }
+
     private static void Pixel(byte[] image, int width, int x, int y, byte brightness, byte alpha)
     {
         var i = (y * width + x) * 4;
@@ -1048,11 +1143,11 @@ internal static class Tests
     {
         var directory = TempDirectory();
         var store = Store(directory);
-        store.Enqueue(Line(ChatKind.Say, "Évidemment ça marche, 世界 ", "Éric"));
+        store.Enqueue(Line(ChatKind.Say, "Évidemment ça marche, 世界 \uE0BB", "Éric"));
         store.Flush();
 
         var read = Store(directory).Load(10).Single();
-        Same("Évidemment ça marche, 世界 ", read.BodyText, "texte");
+        Same("Évidemment ça marche, 世界 \uE0BB", read.BodyText, "texte");
         Same("Éric", read.SenderText, "nom");
     }
 

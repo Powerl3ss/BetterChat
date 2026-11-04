@@ -60,6 +60,7 @@ public sealed class Plugin : IDalamudPlugin
     public ChatHistoryStore History { get; }
     public RecentTells RecentTells { get; } = new();
     public CommandSuggester Commands { get; } = new();
+    internal GameIconAtlas Icons { get; } = new();
 
     /// <summary>Les messages déjà envoyés, rappelés avec les flèches depuis n'importe quelle zone de saisie.</summary>
     public InputHistory SentMessages { get; } = new();

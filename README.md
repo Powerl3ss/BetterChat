@@ -27,6 +27,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
 - Export d'une conversation dans un fichier texte (clic droit sur l'onglet).
+- Les icônes du jeu dans les messages, et la sélection de texte à la souris (Ctrl + C ou clic droit pour copier).
 - Tes messages sont retrouvés au prochain lancement (sur ton PC uniquement, un fichier par personnage, jamais le combat).
 
 **Écrire**
@@ -60,8 +61,7 @@ Si Entrée n'ouvre plus la saisie, clique dans la zone de saisie : elle fonction
 ## Limites connues
 
 - Pas de liste d'autotraduction.
-- Pas de sélection de texte à la souris : clic droit sur un message pour le copier.
-- Le texte en italique du jeu est seulement un peu atténué, et les icônes dans les messages ne sont pas dessinées.
+- Le texte en italique du jeu est seulement un peu atténué.
 
 ## Structure
 
@@ -73,6 +73,7 @@ BetterChat/
 │   ├── GameChat.cs         masquer le chat du jeu, touche d'ouverture, canal actif, envoi
 │   ├── MessageConverter.cs message du jeu vers texte coloré et liens
 │   ├── ChannelColors.cs    couleur de chaque canal
+│   ├── GameIconAtlas.cs    dessin des icônes du jeu dans les messages
 │   ├── MacroResolver.cs    aperçu des raccourcis du jeu (<t>, <flag>...)
 │   └── WindowAlert.cs      clignotement dans la barre des tâches
 ├── Core/                   logique sans dépendance au jeu (testée à part)
@@ -82,6 +83,7 @@ BetterChat/
 │   ├── TextLayout.cs       découpage du texte en lignes
 │   ├── ChatInput.cs        saisie : historique, canaux, commandes, mentions, liens
 │   ├── ChatSearch.cs       recherche avancée, anti-spam, séparateurs, export, aperçu
+│   ├── GameIcons.cs        icônes du jeu dans le texte, lecture de leur table
 │   └── ChatHistoryStore.cs messages enregistrés sur le disque
 ├── images/                 logo
 └── Windows/

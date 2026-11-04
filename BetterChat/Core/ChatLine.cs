@@ -127,18 +127,18 @@ public sealed class ChatLine
 
     /// <summary>Le message tel qu'on le copie : « Nom : texte ».</summary>
     [JsonIgnore]
-    public string CopyText => SenderText.Length > 0 ? $"{SenderText}: {BodyText}" : BodyText;
+    public string CopyText => GameIcons.Strip(SenderText.Length > 0 ? $"{SenderText}: {BodyText}" : BodyText);
 
     /// <summary>Nom et texte sans majuscules ni accents, pour la recherche.</summary>
     [JsonIgnore]
-    public string FoldedText => foldedText ??= TextFold.Of($"{SenderText} {BodyText}");
+    public string FoldedText => foldedText ??= TextFold.Of(GameIcons.Strip($"{SenderText} {BodyText}"));
 
     /// <summary>Le texte seul, pour l'anti-spam : un nom de joueur ne doit pas déclencher un filtre.</summary>
     [JsonIgnore]
-    public string FoldedBody => foldedBody ??= TextFold.Of(BodyText);
+    public string FoldedBody => foldedBody ??= TextFold.Of(GameIcons.Strip(BodyText));
 
     [JsonIgnore]
-    public string FoldedAuthor => foldedAuthor ??= TextFold.Of(Author != null ? $"{Author.Text} {SenderText}" : SenderText);
+    public string FoldedAuthor => foldedAuthor ??= TextFold.Of(GameIcons.Strip(Author != null ? $"{Author.Text} {SenderText}" : SenderText));
 
     private static string Join(List<ChatSpan> spans)
     {

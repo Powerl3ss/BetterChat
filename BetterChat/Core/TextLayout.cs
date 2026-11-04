@@ -250,3 +250,77 @@ public sealed class BadgeLayout
         return new BadgeLayout(pens, (inkLeft + inkRight) / 2f, Math.Max(minWidth, inkRight - inkLeft + padding * 2f));
     }
 }
+
+/// <summary>Retrouver et extraire un morceau de texte déjà mis en page, pour la sélection à la souris.</summary>
+public static class TextSelection
+{
+    /// <summary>Position dans le texte (en caractères depuis le début) sous un point donné, au plus près.</summary>
+    /// <param name="line">Numéro de la ligne affichée.</param>
+    /// <param name="x">Position depuis le bord gauche de la zone de texte.</param>
+    public static int OffsetAt(LaidOutText text, int line, float x, Func<string, float> measure)
+    {
+        var offset = 0;
+        foreach (var run in text.Runs)
+        {
+            if (run.Line > line)
+                return offset;
+
+            if (run.Line == line)
+            {
+                if (x < run.X)
+                    return offset;
+
+                if (x <= run.X + run.Width)
+                    return offset + CharacterAt(run.Text, x - run.X, measure);
+            }
+
+            offset += run.Text.Length;
+        }
+
+        return offset;
+    }
+
+    private static int CharacterAt(string text, float x, Func<string, float> measure)
+    {
+        var previous = 0f;
+        for (var i = 1; i <= text.Length; i++)
+        {
+            var width = measure(text[..i]);
+            if (x < (previous + width) / 2f)
+                return i - 1;
+            previous = width;
+        }
+
+        return text.Length;
+    }
+
+    /// <summary>Le texte entre deux positions, sans un éventuel morceau à ignorer (la place réservée à une icône).</summary>
+    public static string Extract(LaidOutText text, int start, int end, int skipSpan = -1)
+    {
+        var builder = new StringBuilder();
+        var offset = 0;
+        foreach (var run in text.Runs)
+        {
+            var from = Math.Max(start - offset, 0);
+            var to = Math.Min(end - offset, run.Text.Length);
+            if (from < to && run.SpanIndex != skipSpan)
+                builder.Append(run.Text, from, to - from);
+
+            offset += run.Text.Length;
+        }
+
+        return GameIcons.Strip(builder.ToString());
+    }
+
+    /// <summary>La partie surlignée d'un bout de texte. Null s'il est hors de la sélection.</summary>
+    /// <param name="runStart">Position de ce bout de texte dans le message.</param>
+    public static (float Left, float Right)? Highlight(TextRun run, int runStart, int start, int end, Func<string, float> measure)
+    {
+        var from = Math.Max(start - runStart, 0);
+        var to = Math.Min(end - runStart, run.Text.Length);
+        if (from >= to)
+            return null;
+
+        return (run.X + measure(run.Text[..from]), run.X + measure(run.Text[..to]));
+    }
+}

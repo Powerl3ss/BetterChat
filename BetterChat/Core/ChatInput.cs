@@ -346,7 +346,7 @@ public sealed class MentionMatcher
 /// <summary>Repère les adresses web dans le texte, pour les rendre cliquables.</summary>
 public static partial class UrlFinder
 {
-    [GeneratedRegex(@"\b(?:https?://|www\.)[^\s<>""-]+", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(?:https?://|www\.)[^\s<>""\uE000-\uF8FF]+", RegexOptions.IgnoreCase)]
     private static partial Regex UrlRegex();
 
     /// <summary>Découpe les morceaux de texte sans lien autour des adresses qu'ils contiennent.</summary>
