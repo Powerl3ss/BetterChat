@@ -3,7 +3,6 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
-using BetterChat.Chat;
 using BetterChat.Core;
 
 namespace BetterChat.Windows;
@@ -17,7 +16,6 @@ public sealed partial class ChatWindow
     private const float BadgeDotSize = 6f;
     private const float BadgeDotGap = 3f;
 
-    private readonly ShortcutKey searchShortcut = new(Dalamud.Game.ClientState.Keys.VirtualKey.F);
     private int menuTab = -1;
     private bool searchOpen;
     private bool focusSearch;
@@ -83,7 +81,7 @@ public sealed partial class ChatWindow
 
         // Boutons à droite.
         ImGui.SetCursorPos(new Vector2(searchX, iconY));
-        if (IconButton("##search", FontAwesomeIcon.Search, iconSize, "Rechercher dans cet onglet (Ctrl + F)", searchOpen))
+        if (IconButton("##search", FontAwesomeIcon.Search, iconSize, "Rechercher dans cet onglet", searchOpen))
             ToggleSearch();
 
         ImGui.SetCursorPos(new Vector2(pinX, iconY));
@@ -96,15 +94,6 @@ public sealed partial class ChatWindow
         ImGui.SetCursorPos(new Vector2(settingsX, iconY));
         if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize, "Réglages\nClic droit sur un onglet : ses options"))
             plugin.ToggleConfigUi();
-
-        // Hors d'une zone de texte, Dalamud ne transmet pas la touche à ImGui : voir ShortcutKey. Pendant la saisie,
-        // c'est l'inverse : le jeu ne la voit plus, et seul ImGui la reçoit.
-        var searchPressed = searchShortcut.Pressed();
-        if (ImGui.GetIO().WantTextInput)
-            searchPressed = ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.F, false);
-        var overChat = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) || ImGui.IsWindowHovered(ImGuiHoveredFlags.RootAndChildWindows);
-        if (searchPressed && overChat)
-            ToggleSearch();
     }
 
     private float TabWidth(ChatFeed feed)

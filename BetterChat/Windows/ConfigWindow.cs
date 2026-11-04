@@ -472,8 +472,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
         {
             TextDimmed("Entrée ouvre la saisie, Tab change de canal, les flèches rappellent tes derniers messages.");
             TextDimmed("Tape « /p bonjour » ou clique sur la pastille à gauche de la saisie pour choisir où écrire.");
-            TextDimmed("Clique sur un nom, un objet ou une carte dans un message. Ctrl + C copie le texte sélectionné à la souris, ou le message survolé.");
-            TextDimmed("Ctrl + F cherche dans l'onglet affiché, par exemple : de:Jean canal:CL date:hier.");
+            TextDimmed("Clique sur un nom, un objet ou une carte dans un message. Sélectionne du texte à la souris, puis clic droit pour le copier.");
+            TextDimmed("La loupe cherche dans l'onglet affiché, par exemple : de:Jean canal:CL date:hier.");
             TextDimmed("Clic droit sur un onglet : ses options, le détacher dans une fenêtre, l'exporter dans un fichier.");
         });
 

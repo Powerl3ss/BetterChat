@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
@@ -83,9 +82,6 @@ public sealed class MessageList
 
     // Sélection à la souris : du point où le bouton a été enfoncé jusqu'au curseur.
     private readonly record struct TextPos(long LineId, int Offset);
-    // La dernière liste où l'on a sélectionné : c'est elle qui répond à Ctrl + C.
-    private static MessageList? selectionOwner;
-    private readonly ShortcutKey copyShortcut = new(VirtualKey.C);
     private TextPos selectionAnchor;
     private TextPos selectionEnd;
     private bool selecting;
@@ -713,7 +709,6 @@ public sealed class MessageList
             selectionAnchor = PositionAt(feed, origin, mouse);
             selectionEnd = selectionAnchor;
             selecting = true;
-            selectionOwner = this;
         }
         else if (selecting)
         {
@@ -723,29 +718,6 @@ public sealed class MessageList
                 selecting = false;
         }
 
-        HandleCopyShortcut(feed, origin, mouse, hoverable);
-    }
-
-    /// <summary>Ctrl + C copie la sélection, ou à défaut le message sous la souris. Dans une zone de texte, il copie ce texte.</summary>
-    private void HandleCopyShortcut(ChatFeed feed, Vector2 origin, Vector2 mouse, bool hoverable)
-    {
-        var pressed = copyShortcut.Pressed();
-        if (!pressed || selecting || ImGui.GetIO().WantTextInput)
-            return;
-
-        if (selectionOwner is { HasSelection: true })
-        {
-            if (ReferenceEquals(selectionOwner, this))
-                ImGui.SetClipboardText(SelectedText(feed));
-            return;
-        }
-
-        if (!hoverable)
-            return;
-
-        var line = feed.Visible[Math.Clamp(stack.FirstVisible(mouse.Y - origin.Y), 0, stack.Count - 1)];
-        if (line.Kind != ChatKind.SessionStart)
-            ImGui.SetClipboardText(line.CopyText);
     }
 
     /// <summary>Le curseur dépasse de la liste pendant la sélection : elle défile pour aller plus loin.</summary>
@@ -944,7 +916,7 @@ public sealed class MessageList
                     Tip.MenuSeparator();
                 }
 
-                if (HasSelection && Tip.MenuItem("Copier la sélection", FontAwesomeIcon.Clipboard, "Ctrl + C"))
+                if (HasSelection && Tip.MenuItem("Copier la sélection", FontAwesomeIcon.Clipboard))
                     ImGui.SetClipboardText(SelectedText(feed));
 
                 if (fromOther)
