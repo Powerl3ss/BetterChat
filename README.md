@@ -27,7 +27,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
 - Export d'une conversation dans un fichier texte (clic droit sur l'onglet).
-- Les icônes du jeu dans les messages, et la sélection de texte à la souris (Ctrl + C ou clic droit pour copier).
+- Les icônes du jeu dans les messages, et la sélection de texte à la souris (Ctrl + C copie la sélection ou le message survolé, le clic droit aussi).
 - Tes messages sont retrouvés au prochain lancement (sur ton PC uniquement, un fichier par personnage, jamais le combat).
 
 **Écrire**

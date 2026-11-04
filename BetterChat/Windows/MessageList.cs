@@ -82,6 +82,8 @@ public sealed class MessageList
 
     // Sélection à la souris : du point où le bouton a été enfoncé jusqu'au curseur.
     private readonly record struct TextPos(long LineId, int Offset);
+    // La dernière liste où l'on a sélectionné : c'est elle qui répond à Ctrl + C.
+    private static MessageList? selectionOwner;
     private TextPos selectionAnchor;
     private TextPos selectionEnd;
     private bool selecting;
@@ -709,6 +711,7 @@ public sealed class MessageList
             selectionAnchor = PositionAt(feed, origin, mouse);
             selectionEnd = selectionAnchor;
             selecting = true;
+            selectionOwner = this;
         }
         else if (selecting)
         {
@@ -718,9 +721,32 @@ public sealed class MessageList
                 selecting = false;
         }
 
-        if (HasSelection && !selecting && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
-            !ImGui.GetIO().WantTextInput && ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.C, false))
-            ImGui.SetClipboardText(SelectedText(feed));
+        HandleCopyShortcut(feed, origin, mouse, hoverable);
+    }
+
+    /// <summary>
+    /// Ctrl + C copie la sélection, ou à défaut le message sous la souris. Le focus n'entre pas en compte : le jeu
+    /// peut le reprendre dès qu'on relâche la souris, et le raccourci ne répondait alors plus.
+    /// </summary>
+    private void HandleCopyShortcut(ChatFeed feed, Vector2 origin, Vector2 mouse, bool hoverable)
+    {
+        var io = ImGui.GetIO();
+        if (selecting || io.WantTextInput || !io.KeyCtrl || !ImGui.IsKeyPressed(ImGuiKey.C, false))
+            return;
+
+        if (selectionOwner is { HasSelection: true })
+        {
+            if (ReferenceEquals(selectionOwner, this))
+                ImGui.SetClipboardText(SelectedText(feed));
+            return;
+        }
+
+        if (!hoverable)
+            return;
+
+        var line = feed.Visible[Math.Clamp(stack.FirstVisible(mouse.Y - origin.Y), 0, stack.Count - 1)];
+        if (line.Kind != ChatKind.SessionStart)
+            ImGui.SetClipboardText(line.CopyText);
     }
 
     /// <summary>Le curseur dépasse de la liste pendant la sélection : elle défile pour aller plus loin.</summary>
