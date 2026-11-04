@@ -37,7 +37,8 @@ public sealed partial class ChatWindow
         var iconY = MathF.Round((height - iconSize) / 2f);
         var iconGap = 2f * S;
         var settingsX = RightButtonX(size.X, FontAwesomeIcon.Cog, iconSize);
-        var searchX = settingsX - iconSize - iconGap;
+        var pinX = settingsX - iconSize - iconGap;
+        var searchX = pinX - iconSize - iconGap;
         var available = searchX - 4f * S;
 
         // Si les onglets ne tiennent pas, ils partagent la place et leur nom est coupé.
@@ -82,6 +83,13 @@ public sealed partial class ChatWindow
         ImGui.SetCursorPos(new Vector2(searchX, iconY));
         if (IconButton("##search", FontAwesomeIcon.Search, iconSize, "Rechercher dans cet onglet (Ctrl + F)", searchOpen))
             ToggleSearch();
+
+        ImGui.SetCursorPos(new Vector2(pinX, iconY));
+        if (IconButton("##pin", FontAwesomeIcon.Thumbtack, iconSize, Cfg.Locked ? "Position verrouillée\nClic : déverrouiller" : "Verrouiller la position", Cfg.Locked))
+        {
+            Cfg.Locked = !Cfg.Locked;
+            Cfg.Save();
+        }
 
         ImGui.SetCursorPos(new Vector2(settingsX, iconY));
         if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize, "Réglages\nClic droit sur un onglet : ses options"))
