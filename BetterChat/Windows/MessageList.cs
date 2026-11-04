@@ -328,6 +328,9 @@ public sealed class MessageList
         var bottom = origin.Y + stack.Bottom(index);
         var drawList = ImGui.GetWindowDrawList();
 
+        // L'écart passe avant tout le reste, séparateurs compris.
+        top += topGaps[index];
+
         var marks = separators[index];
         if (marks.Day is { } day)
         {
@@ -343,7 +346,6 @@ public sealed class MessageList
         }
 
         // Le fond du survol et des mentions serre le texte : il n'englobe pas l'écart entre les messages.
-        top += topGaps[index];
         var rowMin = new Vector2(origin.X, top);
         var rowMax = new Vector2(origin.X + width, bottom);
 
