@@ -205,8 +205,9 @@ public sealed class MessageList
 
             // Après un séparateur, le nom de l'auteur est toujours rappelé.
             var header = Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(lines[i]) && (marks.Any || ChatGrouping.StartsGroup(previous, lines[i]));
-            // L'écart choisi dans les réglages, le même entre tous les messages.
-            var gap = i > 0 ? MathF.Round(Cfg.MessageSpacing * S) : 0f;
+            // L'écart choisi dans les réglages. Les messages d'un même joueur, à la suite, restent collés.
+            var followsSameAuthor = ChatGrouping.HasAuthorHeader(lines[i]) && !marks.Any && !ChatGrouping.StartsGroup(previous, lines[i]);
+            var gap = i > 0 && !followsSameAuthor ? MathF.Round(Cfg.MessageSpacing * S) : 0f;
 
             headers.Add(header);
             separators.Add(marks);
