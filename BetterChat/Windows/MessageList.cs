@@ -205,9 +205,8 @@ public sealed class MessageList
 
             // Après un séparateur, le nom de l'auteur est toujours rappelé.
             var header = Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(lines[i]) && (marks.Any || ChatGrouping.StartsGroup(previous, lines[i]));
-            // L'écart choisi dans les réglages, le même entre tous les messages. Une barre masquée n'en ajoute pas.
-            var hiddenBar = lines[i].Kind == ChatKind.SessionStart && !Cfg.ShowSeparators;
-            var gap = i > 0 && !hiddenBar ? MathF.Round(Cfg.MessageSpacing * S) : 0f;
+            // L'écart choisi dans les réglages, le même entre tous les messages.
+            var gap = i > 0 ? MathF.Round(Cfg.MessageSpacing * S) : 0f;
 
             headers.Add(header);
             separators.Add(marks);
@@ -220,9 +219,6 @@ public sealed class MessageList
 
     private float LineHeightOf(ChatLine line, bool header)
     {
-        if (line.Kind == ChatKind.SessionStart)
-            return Cfg.ShowSeparators ? SeparatorHeight : 0f;
-
         var height = LayoutOf(line).Text.LineCount * lineHeight;
         return header ? height + lineHeight : height;
     }
@@ -338,13 +334,6 @@ public sealed class MessageList
             top += SeparatorHeight;
         }
 
-        if (line.Kind == ChatKind.SessionStart)
-        {
-            if (Cfg.ShowSeparators)
-                DrawSeparator(drawList, origin.X, top, line.BodyText, Cfg.SecondaryColor);
-            return;
-        }
-
         // Le fond du survol et des mentions serre le texte : il n'englobe pas l'écart entre les messages.
         var rowMin = new Vector2(origin.X, top);
         var rowMax = new Vector2(origin.X + width, bottom);
@@ -391,7 +380,7 @@ public sealed class MessageList
         }
     }
 
-    /// <summary>Une ligne horizontale coupée par un texte centré : changement de date, ou reconnexion.</summary>
+    /// <summary>Une ligne horizontale coupée par un texte centré : le changement de date.</summary>
     private void DrawSeparator(ImDrawListPtr drawList, float originX, float top, string text, Vector4 color)
     {
         var left = originX + textLeft;
@@ -673,7 +662,7 @@ public sealed class MessageList
         var index = Math.Clamp(stack.FirstVisible(mouse.Y - origin.Y), 0, stack.Count - 1);
         var line = feed.Visible[index];
         var textTop = origin.Y + BodyTop(index);
-        if (line.Kind == ChatKind.SessionStart || mouse.Y < textTop)
+        if (mouse.Y < textTop)
             return new TextPos(line.Id, 0);
 
         var row = (int)MathF.Floor((mouse.Y - textTop) / lineHeight);
@@ -685,7 +674,7 @@ public sealed class MessageList
         var index = Math.Clamp(stack.FirstVisible(mouse.Y - origin.Y), 0, stack.Count - 1);
         var line = feed.Visible[index];
         var textTop = origin.Y + BodyTop(index);
-        if (line.Kind == ChatKind.SessionStart || mouse.Y < textTop)
+        if (mouse.Y < textTop)
             return false;
 
         var row = (int)MathF.Floor((mouse.Y - textTop) / lineHeight);
@@ -741,7 +730,7 @@ public sealed class MessageList
         foreach (var line in feed.Visible)
         {
             var (start, end) = SelectionIn(line);
-            if (start >= end || line.Kind == ChatKind.SessionStart)
+            if (start >= end)
                 continue;
 
             var layout = LayoutOf(line);

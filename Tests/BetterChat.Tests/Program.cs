@@ -47,12 +47,6 @@ var tests = new (string Name, Action Run)[]
     ("Sélection : surlignage d'un bout de texte", Tests.SelectionHighlight),
     ("Icône : le dessin est trouvé, sans les marges ni l'ombre", Tests.IconInkFound),
     ("Icône : image vide ou illisible, l'image entière sert", Tests.IconInkFallback),
-    ("Connexion : la barre apparaît tout de suite, dans tous les onglets", Tests.SessionBarInEveryTab),
-    ("Connexion : ni en haut de la liste, ni deux de suite", Tests.SessionBarNotDoubled),
-    ("Connexion : la barre ne compte pas comme un non-lu", Tests.SessionBarIsNotUnread),
-    ("Connexion : absente des résultats de recherche", Tests.SessionBarHiddenBySearch),
-    ("Connexion : gardée dans l'historique", Tests.SessionBarIsSaved),
-    ("Répétitions : pas d'une connexion à l'autre", Tests.RepeatsStopAtSession),
     ("Export : format lisible, sans symboles du jeu", Tests.ExportFormat),
     ("Aperçu : raccourcis remplacés, inconnus conservés", Tests.MacroExpansion),
     ("Mémoire : le combat part avant les discussions", Tests.TrimRemovesBattleFirst),
@@ -696,98 +690,6 @@ internal static class Tests
     {
         Same(IconInk.Full, IconInk.Find(new byte[4 * 4 * 4], 4, 4), "image vide");
         Same(IconInk.Full, IconInk.Find(new byte[3], 4, 4), "image trop courte");
-    }
-
-    public static void SessionBarInEveryTab()
-    {
-        var log = new ChatLog();
-        var party = Feed(ChatKind.Party);
-        log.Add(Line(ChatKind.Party, "avant", "Jean"));
-        party.Update(log, 0, NoMute);
-
-        log.Add(ChatLine.SessionStart(T0));
-        party.Update(log, 0, NoMute);
-
-        Same(2, party.Visible.Count, "visible sans attendre de nouveau message");
-        Same(ChatKind.SessionStart, party.Visible[1].Kind, "la barre");
-    }
-
-    public static void SessionBarNotDoubled()
-    {
-        var log = new ChatLog();
-        var feed = Feed(ChatKind.Say);
-        log.Add(ChatLine.SessionStart(T0));
-        feed.Update(log, 0, NoMute);
-        Same(0, feed.Visible.Count, "rien à séparer en haut");
-
-        log.Add(Line(ChatKind.Say, "salut", "Jean"));
-        log.Add(ChatLine.SessionStart(T0));
-        log.Add(ChatLine.SessionStart(T0));
-        feed.Update(log, 0, NoMute);
-        Same(2, feed.Visible.Count, "une seule barre après le message");
-
-        feed.Update(log, 1, NoMute);
-        Same(2, feed.Visible.Count, "pareil après une reconstruction");
-    }
-
-    public static void SessionBarIsNotUnread()
-    {
-        var log = new ChatLog();
-        var feed = Feed(ChatKind.Say);
-        log.Add(Line(ChatKind.Say, "avant", "Jean"));
-        feed.Update(log, 0, NoMute);
-        feed.MarkRead();
-
-        var bar = ChatLine.SessionStart(T0);
-        log.Add(bar);
-        feed.Update(log, 0, NoMute);
-        Same(0, feed.Unread, "la barre n'est pas un message à lire");
-
-        log.Add(Line(ChatKind.Say, "après", "Jean"));
-        feed.Update(log, 0, NoMute);
-        Same(1, feed.Unread, "le message suivant compte");
-    }
-
-    public static void SessionBarHiddenBySearch()
-    {
-        var log = new ChatLog();
-        log.Add(Line(ChatKind.Say, "salut", "Jean"));
-        log.Add(ChatLine.SessionStart(T0));
-
-        var feed = Feed(ChatKind.Say);
-        feed.SetSearch("connexion", Today);
-        feed.Update(log, 0, NoMute);
-        Same(0, feed.Visible.Count, "recherche sur son texte");
-
-        feed.SetSearch($"date:{T0.ToLocalTime():dd/MM/yyyy}", Today);
-        feed.Update(log, 0, NoMute);
-        Check(feed.Visible.All(l => l.Kind != ChatKind.SessionStart), "recherche par date");
-    }
-
-    public static void SessionBarIsSaved()
-    {
-        var directory = TempDirectory();
-        var store = Store(directory);
-        store.Enqueue(ChatLine.SessionStart(T0));
-        store.Flush();
-
-        var read = Store(directory).Load(10).Single();
-        Same(ChatKind.SessionStart, read.Kind, "relue");
-        Same("Nouvelle connexion", read.BodyText, "son texte");
-    }
-
-    public static void RepeatsStopAtSession()
-    {
-        var log = new ChatLog();
-        var feed = CollapsingFeed(ChatKind.Say);
-        feed.Update(log, 0, NoMute);
-
-        log.Add(Line(ChatKind.Say, "salut", "Jean"));
-        log.Add(ChatLine.SessionStart(T0));
-        log.Add(Line(ChatKind.Say, "salut", "Jean"));
-        feed.Update(log, 0, NoMute);
-
-        Same(3, feed.Visible.Count, "le message, la barre, le message");
     }
 
     public static void DateLabels()

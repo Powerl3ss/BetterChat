@@ -103,14 +103,6 @@ public sealed class ChatLine
 
     private string? senderText;
     private string? bodyText;
-    /// <summary>La barre posée au moment d'une connexion, pour séparer les messages conservés des nouveaux.</summary>
-    public static ChatLine SessionStart(DateTime timeUtc) => new()
-    {
-        TimeUtc = timeUtc,
-        Kind = ChatKind.SessionStart,
-        Body = new List<ChatSpan> { new("Nouvelle connexion") },
-    };
-
     private string? foldedText;
     private string? foldedBody;
     private string? foldedAuthor;

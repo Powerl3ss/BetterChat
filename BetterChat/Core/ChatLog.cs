@@ -90,10 +90,6 @@ public sealed class ChatTabSettings
 
     public bool Accepts(ChatLine line)
     {
-        // Une connexion concerne tous les onglets, quels que soient leurs canaux.
-        if (line.Kind == ChatKind.SessionStart)
-            return true;
-
         if (!Kinds.Contains(line.Kind))
             return false;
 
@@ -247,14 +243,6 @@ public sealed class ChatFeed
             if (!Settings.Accepts(line) || isHidden(line))
                 continue;
 
-            // La barre de connexion n'est pas un message à lire.
-            if (line.Kind == ChatKind.SessionStart)
-            {
-                if (Matches(line))
-                    AddVisible(line);
-                continue;
-            }
-
             // Une répétition ne relance pas le compteur : le message est déjà signalé.
             if (Matches(line) && !AddVisible(line))
                 continue;
@@ -290,10 +278,6 @@ public sealed class ChatFeed
     /// <summary>Ajoute le message, ou compte une répétition du précédent. Renvoie vrai s'il a sa propre ligne.</summary>
     private bool AddVisible(ChatLine line)
     {
-        // Rien à séparer en haut de la liste, ni entre deux connexions sans message dans cet onglet.
-        if (line.Kind == ChatKind.SessionStart && (visible.Count == 0 || visible[^1].Kind == ChatKind.SessionStart))
-            return false;
-
         if (CollapseRepeats && visible.Count > 0 && IsRepeatOf(visible[^1], line))
         {
             repeats[visible[^1].Id] = RepeatCount(visible[^1]) + 1;
@@ -314,8 +298,7 @@ public sealed class ChatFeed
         string.Equals(previous.BodyText, line.BodyText, StringComparison.Ordinal) &&
         string.Equals(previous.AuthorKey, line.AuthorKey, StringComparison.Ordinal);
 
-    // Dans des résultats de recherche, la barre n'a plus de sens.
-    private bool Matches(ChatLine line) => query.IsEmpty || (line.Kind != ChatKind.SessionStart && query.Matches(line));
+    private bool Matches(ChatLine line) => query.IsEmpty || query.Matches(line);
 }
 
 /// <summary>Position verticale de chaque message d'une liste, pour ne dessiner que ceux à l'écran.</summary>
