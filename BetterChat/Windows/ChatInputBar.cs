@@ -241,7 +241,7 @@ public sealed class ChatInputBar
         var channels = channelMenu?.Count ?? 0;
         var tells = plugin.RecentTells.People.Count;
         var rowStep = ChannelRowHeight + 2f * S;
-        var headers = (tells > 0 ? 2 : 1) * (ImGui.GetTextLineHeight() + 10f * S);
+        var headers = (tells > 0 ? 2 : 1) * (ImGui.GetTextLineHeight() + 22f * S);
         var estimatedHeight = (channels + tells) * rowStep + headers + 16f * S;
         var fitsAbove = channelPillMin.Y - gap - estimatedHeight >= ImGuiHelpers.MainViewport.Pos.Y;
 
@@ -312,13 +312,13 @@ public sealed class ChatInputBar
         ImGui.EndPopup();
     }
 
-    /// <summary>Petit titre de section du menu : icône et texte discrets.</summary>
+    /// <summary>Petit titre de section du menu : icône et texte discrets, puis la séparation commune aux menus.</summary>
     private static void MenuHeader(FontAwesomeIcon icon, string text)
     {
         ImGui.Dummy(new Vector2(0f, 2f * S));
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8f * S);
         Tip.Line(icon, Tip.Dim, text, color: Tip.Dim);
-        ImGui.Dummy(new Vector2(0f, 1f * S));
+        Tip.MenuSeparator();
     }
 
     /// <summary>
