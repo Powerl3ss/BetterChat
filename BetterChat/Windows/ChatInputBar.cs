@@ -277,7 +277,8 @@ public sealed class ChatInputBar
         }
         var rowW = MathF.Max(200f * S, 24f * S + nameW + 24f * S + detailW + 30f * S);
 
-        MenuHeader(FontAwesomeIcon.CommentDots, "Canal de discussion");
+        Tip.MenuTitle("Canal de discussion");
+        Tip.MenuSeparator();
         for (var i = 0; i < channels.Count; i++)
         {
             var choice = channels[i];
@@ -292,9 +293,8 @@ public sealed class ChatInputBar
 
         if (tells.Count > 0)
         {
-            ImGui.Dummy(new Vector2(0f, 2f * S));
-            ImGui.Separator();
-            MenuHeader(FontAwesomeIcon.Envelope, "Messages privés récents");
+            ImGui.Dummy(new Vector2(0f, 5f * S));
+            Tip.MenuSection("Messages privés récents");
             var tellColor = plugin.Colors.Of(ChatKind.TellOutgoing);
             for (var i = 0; i < tells.Count; i++)
             {
@@ -310,15 +310,6 @@ public sealed class ChatInputBar
         }
 
         ImGui.EndPopup();
-    }
-
-    /// <summary>Petit titre de section du menu : icône et texte discrets, puis la séparation commune aux menus.</summary>
-    private static void MenuHeader(FontAwesomeIcon icon, string text)
-    {
-        ImGui.Dummy(new Vector2(0f, 2f * S));
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8f * S);
-        Tip.Line(icon, Tip.Dim, text, color: Tip.Dim);
-        Tip.MenuSeparator();
     }
 
     /// <summary>

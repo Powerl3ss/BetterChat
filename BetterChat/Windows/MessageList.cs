@@ -913,15 +913,15 @@ public sealed class MessageList
         {
             if (contextLine is { } line)
             {
+                var fromOther = line.Author != null && line.Author.Text != plugin.LocalName;
+                Tip.MenuTitle(fromOther ? line.Author!.TellTarget : "Message");
+                Tip.MenuSeparator();
+
                 if (HasSelection && Tip.MenuItem("Copier la sélection", FontAwesomeIcon.Clipboard, "Ctrl + C"))
                     ImGui.SetClipboardText(SelectedText(feed));
 
-                if (line.Author != null && line.Author.Text != plugin.LocalName)
-                {
-                    Tip.MenuTitle(line.Author.TellTarget);
-                    Tip.MenuSeparator();
-                    DrawPlayerActions(line.Author);
-                }
+                if (fromOther)
+                    DrawPlayerActions(line.Author!);
 
                 if (Tip.MenuItem("Copier le message", FontAwesomeIcon.Copy))
                     ImGui.SetClipboardText(line.CopyText);
@@ -937,7 +937,7 @@ public sealed class MessageList
                 case LinkKind.Player:
                     Tip.MenuTitle(contextLink.TellTarget);
                     Tip.MenuSeparator();
-                    DrawPlayerActions(contextLink, separatorAfter: false);
+                    DrawPlayerActions(contextLink);
                     break;
 
                 case LinkKind.Item:
@@ -963,6 +963,8 @@ public sealed class MessageList
                     break;
 
                 case LinkKind.Url:
+                    Tip.MenuTitle("Lien web");
+                    Tip.MenuSeparator();
                     if (Tip.MenuItem("Copier le lien", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(contextLink.Text);
                     break;
@@ -976,6 +978,8 @@ public sealed class MessageList
                     break;
 
                 case LinkKind.PartyFinder:
+                    Tip.MenuTitle("Recherche de groupe");
+                    Tip.MenuSeparator();
                     if (Tip.MenuItem("Ouvrir l'annonce", FontAwesomeIcon.Users))
                         GameChat.OpenPartyFinder(contextLink.Id);
                     break;
@@ -1010,6 +1014,7 @@ public sealed class MessageList
             return;
 
         Tip.Title(colorPlayer);
+        Tip.MenuSeparator();
 
         var current = Cfg.PlayerColors.TryGetValue(colorPlayer, out var chosen) ? chosen : Accent;
         var color = new Vector3(current.X, current.Y, current.Z);
@@ -1029,7 +1034,7 @@ public sealed class MessageList
         ImGui.EndPopup();
     }
 
-    private void DrawPlayerActions(ChatLink player, bool separatorAfter = true)
+    private void DrawPlayerActions(ChatLink player)
     {
         if (player.Text != plugin.LocalName && Tip.MenuItem("Envoyer un message privé", FontAwesomeIcon.Envelope))
         {
@@ -1048,9 +1053,6 @@ public sealed class MessageList
 
         if (player.Text != plugin.LocalName && Tip.MenuItem("Masquer ses messages", FontAwesomeIcon.CommentSlash, danger: true))
             plugin.MutePlayer(player.Text);
-
-        if (separatorAfter)
-            Tip.MenuSeparator();
     }
 
     /// <summary>Un lien dans le chat peut mener n'importe où : l'adresse s'affiche en entier avant de l'ouvrir.</summary>
@@ -1061,9 +1063,10 @@ public sealed class MessageList
             return;
 
         var url = pendingUrl?.Text ?? string.Empty;
-        ImGui.TextUnformatted("Ouvrir ce lien dans ton navigateur ?");
+        Tip.Title("Ouvrir ce lien dans ton navigateur ?");
+        Tip.MenuSeparator();
         ImGui.TextColored(TextDim, url);
-        ImGui.Separator();
+        ImGui.Dummy(new Vector2(0f, 2f * S));
 
         if (ImGui.Button("Ouvrir"))
         {
