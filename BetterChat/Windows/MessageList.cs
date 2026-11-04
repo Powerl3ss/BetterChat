@@ -31,9 +31,6 @@ public sealed class MessageList
     private const int WidthCacheLimit = 20000;
     private const float SelectionScrollSpeed = 320f;
 
-    // L'air autour d'un bloc de messages d'un joueur : le même au-dessus et en dessous.
-    private const float GroupGap = 8f;
-
     // Les icônes de job du jeu se suivent à partir de ce numéro, dans l'ordre de la feuille ClassJob.
     private const uint JobIconBase = 62000;
     private static readonly Dictionary<uint, IconInk> JobIconInks = new();
@@ -177,7 +174,7 @@ public sealed class MessageList
         timeColumn = Cfg.Style == ChatStyle.Modern && Cfg.ShowTimestamps ? MathF.Ceiling(Measure("00:00") + 6f * S) : 0f;
 
         var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor,
-                                   HashCode.Combine(Cfg.ShowJobIcons, Cfg.JobIconHeight), Cfg.ShowSeparators);
+                                   HashCode.Combine(Cfg.ShowJobIcons, Cfg.JobIconHeight, Cfg.MessageSpacing), Cfg.ShowSeparators);
         var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
 
         if (rebuild)
@@ -208,35 +205,26 @@ public sealed class MessageList
 
             // Après un séparateur, le nom de l'auteur est toujours rappelé.
             var header = Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(lines[i]) && (marks.Any || ChatGrouping.StartsGroup(previous, lines[i]));
-            // Un bloc de joueur s'écarte de ce qui le précède, et une ligne sans auteur s'écarte du bloc qu'elle suit.
-            var afterBlock = previous != null && Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(previous) &&
-                             !ChatGrouping.HasAuthorHeader(lines[i]) && lines[i].Kind != ChatKind.SessionStart;
-            var gap = header || afterBlock ? GroupGap * S : 0f;
+            // L'écart choisi dans les réglages, le même entre tous les messages. Une barre masquée n'en ajoute pas.
+            var hiddenBar = lines[i].Kind == ChatKind.SessionStart && !Cfg.ShowSeparators;
+            var gap = i > 0 && !hiddenBar ? MathF.Round(Cfg.MessageSpacing * S) : 0f;
 
             headers.Add(header);
             separators.Add(marks);
             topGaps.Add(gap);
-            stack.Add(LineHeightOf(lines[i], i, header) + gap + SeparatorsHeight(marks));
+            stack.Add(LineHeightOf(lines[i], header) + gap + SeparatorsHeight(marks));
         }
     }
 
     private float SeparatorsHeight(LineSeparators marks) => marks.Day != null ? SeparatorHeight : 0f;
 
-    private float LineHeightOf(ChatLine line, int index, bool header)
+    private float LineHeightOf(ChatLine line, bool header)
     {
         if (line.Kind == ChatKind.SessionStart)
             return Cfg.ShowSeparators ? SeparatorHeight : 0f;
 
-        var layout = LayoutOf(line);
-        var height = layout.Text.LineCount * lineHeight;
-        var flows = index > 0 && !header && Cfg.Style == ChatStyle.Modern && ChatGrouping.HasAuthorHeader(line);
-
-        if (header)
-            height += lineHeight + 1f * S;
-
-        // Le petit air sous chaque message. Celui entre deux blocs est compté au-dessus du suivant : voir GroupGap.
-        height += header || flows ? 2f * S : 3f * S;
-        return height;
+        var height = LayoutOf(line).Text.LineCount * lineHeight;
+        return header ? height + lineHeight : height;
     }
 
     private LineLayout LayoutOf(ChatLine line)
@@ -354,11 +342,10 @@ public sealed class MessageList
             return;
         }
 
-        // Le fond du survol et des mentions serre le texte : il n'englobe pas l'air qui sépare les blocs.
-        var gap = topGaps[index];
-        var rowMin = new Vector2(origin.X, top + MathF.Max(gap - 2f * S, 0f));
+        // Le fond du survol et des mentions serre le texte : il n'englobe pas l'écart entre les messages.
+        top += topGaps[index];
+        var rowMin = new Vector2(origin.X, top);
         var rowMax = new Vector2(origin.X + width, bottom);
-        top += gap;
 
         var hovered = hoverable && ImGui.IsMouseHoveringRect(rowMin, rowMax, false);
         if (hovered)
@@ -387,7 +374,7 @@ public sealed class MessageList
         if (header)
         {
             DrawHeader(line, new Vector2(textX, y), channel, hoverable);
-            y += lineHeight + 1f * S;
+            y += lineHeight;
         }
 
         var layout = LayoutOf(line);
@@ -677,7 +664,7 @@ public sealed class MessageList
 
     /// <summary>Haut du texte d'un message dans la liste, sous ses séparateurs et son en-tête.</summary>
     private float BodyTop(int index) =>
-        stack.Top(index) + SeparatorsHeight(separators[index]) + topGaps[index] + (headers[index] ? 1f * S + lineHeight : 0f);
+        stack.Top(index) + SeparatorsHeight(separators[index]) + topGaps[index] + (headers[index] ? lineHeight : 0f);
 
     private TextPos PositionAt(ChatFeed feed, Vector2 origin, Vector2 mouse)
     {

@@ -725,6 +725,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     using (ImRaii.Disabled(!Cfg.TextOutline))
                         changed |= SliderRow("Intensité du contour", null, Cfg.OutlineStrength, 0.1f, 1f, "%.2f", v => Cfg.OutlineStrength = v);
                     changed |= SliderRow("Taille du texte", null, Cfg.FontSize, 10f, 36f, "%.0f", v => Cfg.FontSize = MathF.Round(v));
+                    changed |= SliderIntRow("Écart entre les messages", "En pixels. 0 : aucun écart.", Cfg.MessageSpacing, 0, 20, v => Cfg.MessageSpacing = v);
                     changed |= ToggleRow("Icônes de job", "À côté du nom des membres du groupe et des joueurs à proximité.", Cfg.ShowJobIcons, v => Cfg.ShowJobIcons = v);
                     using (ImRaii.Disabled(!Cfg.ShowJobIcons))
                         changed |= SliderRow("Taille des icônes de job", "Par rapport à la hauteur du texte.", Cfg.JobIconHeight, 60f, 150f, "%.0f %%", v => Cfg.JobIconHeight = MathF.Round(v));

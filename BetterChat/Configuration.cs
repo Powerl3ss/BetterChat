@@ -37,6 +37,7 @@ public class Configuration : IPluginConfiguration
     public float OutlineStrength { get; set; } = 0.90f;
     public Dictionary<ChatKind, Vector4> ChannelColors { get; set; } = new();
     public bool ShowSeparators { get; set; } = true;
+    public int MessageSpacing { get; set; } = 0; // pixels entre deux messages
     public bool ShowJobIcons { get; set; } = true;
     public float JobIconHeight { get; set; } = 100f; // hauteur du dessin de l'icône, en % de la ligne de texte
     public Dictionary<string, Vector4> PlayerColors { get; set; } = new();
