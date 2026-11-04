@@ -914,8 +914,11 @@ public sealed class MessageList
             if (contextLine is { } line)
             {
                 var fromOther = line.Author != null && line.Author.Text != plugin.LocalName;
-                Tip.MenuTitle(fromOther ? line.Author!.TellTarget : "Message");
-                Tip.MenuSeparator();
+                if (fromOther)
+                {
+                    Tip.MenuTitle(line.Author!.TellTarget);
+                    Tip.MenuSeparator();
+                }
 
                 if (HasSelection && Tip.MenuItem("Copier la sélection", FontAwesomeIcon.Clipboard, "Ctrl + C"))
                     ImGui.SetClipboardText(SelectedText(feed));
@@ -963,8 +966,6 @@ public sealed class MessageList
                     break;
 
                 case LinkKind.Url:
-                    Tip.MenuTitle("Lien web");
-                    Tip.MenuSeparator();
                     if (Tip.MenuItem("Copier le lien", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(contextLink.Text);
                     break;
@@ -978,8 +979,6 @@ public sealed class MessageList
                     break;
 
                 case LinkKind.PartyFinder:
-                    Tip.MenuTitle("Recherche de groupe");
-                    Tip.MenuSeparator();
                     if (Tip.MenuItem("Ouvrir l'annonce", FontAwesomeIcon.Users))
                         GameChat.OpenPartyFinder(contextLink.Id);
                     break;
@@ -1063,8 +1062,7 @@ public sealed class MessageList
             return;
 
         var url = pendingUrl?.Text ?? string.Empty;
-        Tip.Title("Ouvrir ce lien dans ton navigateur ?");
-        Tip.MenuSeparator();
+        ImGui.TextUnformatted("Ouvrir ce lien dans ton navigateur ?");
         ImGui.TextColored(TextDim, url);
         ImGui.Dummy(new Vector2(0f, 2f * S));
 
