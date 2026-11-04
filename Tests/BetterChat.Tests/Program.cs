@@ -38,6 +38,7 @@ var tests = new (string Name, Action Run)[]
     ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
+    ("Joueur : le monde « Dev » du jeu n'est pas un vrai monde", Tests.PlaceholderWorldIgnored),
     ("Emote : le nom n'est pas répété", Tests.EmoteDoesNotRepeatName),
     ("Icônes du jeu : aller-retour dans le texte", Tests.GameIconsInText),
     ("Icônes du jeu : retirées du texte copié et de la recherche", Tests.GameIconsNotCopied),
@@ -566,6 +567,29 @@ internal static class Tests
         Same(null, LineSeparators.Between(second, third, Today).Day, "même jour");
         Same(Today.AddDays(-1), LineSeparators.Between(null, first, Today).Day, "premier message d'un autre jour");
         Same(null, LineSeparators.Between(null, second, Today).Day, "premier message du jour");
+    }
+
+    public static void PlaceholderWorldIgnored()
+    {
+        var player = ChatLink.Player("Berlioz Aristot", "Dev");
+        Same("", player.World, "monde retiré");
+        Same("Berlioz Aristot", player.TellTarget, "message privé sans monde");
+        Same("Jean@Omega", ChatLink.Player("Jean", "Omega").TellTarget, "un vrai monde reste");
+
+        // Un message enregistré avant cette correction.
+        var directory = TempDirectory();
+        var store = Store(directory);
+        store.Enqueue(new ChatLine
+        {
+            TimeUtc = T0,
+            Kind = ChatKind.Say,
+            Body = new List<ChatSpan> { new("salut") },
+            Author = ChatLink.Player("Berlioz Aristot", "Omega"),
+        });
+        store.Flush();
+        var file = Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Single();
+        File.WriteAllText(file, File.ReadAllText(file).Replace("Omega", "Dev"));
+        Same("Berlioz Aristot", Store(directory).Load(10).Single().Author!.TellTarget, "relu du disque");
     }
 
     public static void EmoteDoesNotRepeatName()

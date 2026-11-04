@@ -26,8 +26,17 @@ public sealed class ChatLink
     /// <summary>Joueur : son nom. Lien web : l'adresse. Carte : le texte affiché.</summary>
     public string Text { get; init; } = string.Empty;
 
+    // Les lignes 0 et 1 de la feuille des mondes s'appellent « Dev » : un lien sans monde précis y mène. Ce n'est pas
+    // un vrai monde, et « /tell Nom@Dev » échouerait. Le test vaut aussi pour les messages déjà enregistrés.
+    private const string PlaceholderWorld = "Dev";
+    private readonly string world = string.Empty;
+
     /// <summary>Joueur : son monde, s'il est connu.</summary>
-    public string World { get; init; } = string.Empty;
+    public string World
+    {
+        get => world;
+        init => world = value == PlaceholderWorld ? string.Empty : value;
+    }
 
     /// <summary>Objet : son identifiant. Carte : le territoire.</summary>
     public uint Id { get; init; }
