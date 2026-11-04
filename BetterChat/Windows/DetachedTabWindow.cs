@@ -155,13 +155,6 @@ public sealed class DetachedTabWindow : Window
             if (Tip.MenuItem("Options de l'onglet", FontAwesomeIcon.SlidersH))
                 plugin.OpenConfigAtTabs();
 
-            Tip.MenuSeparator();
-            if (Tip.MenuItem("Fenêtre verrouillée", FontAwesomeIcon.Lock, toggled: Tab.Locked))
-            {
-                Tab.Locked = !Tab.Locked;
-                Cfg.Save();
-            }
-
             Tip.EndMenu();
         }
     }

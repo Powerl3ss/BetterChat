@@ -268,13 +268,6 @@ public sealed partial class ChatWindow
 
             if (Tip.MenuItem("Options de l'onglet", FontAwesomeIcon.SlidersH))
                 plugin.OpenConfigAtTabs();
-
-            Tip.MenuSeparator();
-            if (Tip.MenuItem("Fenêtre verrouillée", FontAwesomeIcon.Lock, toggled: Cfg.Locked))
-            {
-                Cfg.Locked = !Cfg.Locked;
-                Cfg.Save();
-            }
         }
 
         Tip.EndMenu();
