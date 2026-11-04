@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
@@ -84,6 +85,7 @@ public sealed class MessageList
     private readonly record struct TextPos(long LineId, int Offset);
     // La dernière liste où l'on a sélectionné : c'est elle qui répond à Ctrl + C.
     private static MessageList? selectionOwner;
+    private readonly ShortcutKey copyShortcut = new(VirtualKey.C);
     private TextPos selectionAnchor;
     private TextPos selectionEnd;
     private bool selecting;
@@ -724,14 +726,11 @@ public sealed class MessageList
         HandleCopyShortcut(feed, origin, mouse, hoverable);
     }
 
-    /// <summary>
-    /// Ctrl + C copie la sélection, ou à défaut le message sous la souris. Le focus n'entre pas en compte : le jeu
-    /// peut le reprendre dès qu'on relâche la souris, et le raccourci ne répondait alors plus.
-    /// </summary>
+    /// <summary>Ctrl + C copie la sélection, ou à défaut le message sous la souris. Dans une zone de texte, il copie ce texte.</summary>
     private void HandleCopyShortcut(ChatFeed feed, Vector2 origin, Vector2 mouse, bool hoverable)
     {
-        var io = ImGui.GetIO();
-        if (selecting || io.WantTextInput || !io.KeyCtrl || !ImGui.IsKeyPressed(ImGuiKey.C, false))
+        var pressed = copyShortcut.Pressed();
+        if (!pressed || selecting || ImGui.GetIO().WantTextInput)
             return;
 
         if (selectionOwner is { HasSelection: true })

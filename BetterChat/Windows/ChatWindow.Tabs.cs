@@ -3,6 +3,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
+using BetterChat.Chat;
 using BetterChat.Core;
 
 namespace BetterChat.Windows;
@@ -16,6 +17,7 @@ public sealed partial class ChatWindow
     private const float BadgeDotSize = 6f;
     private const float BadgeDotGap = 3f;
 
+    private readonly ShortcutKey searchShortcut = new(Dalamud.Game.ClientState.Keys.VirtualKey.F);
     private int menuTab = -1;
     private bool searchOpen;
     private bool focusSearch;
@@ -95,7 +97,10 @@ public sealed partial class ChatWindow
         if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize, "Réglages\nClic droit sur un onglet : ses options"))
             plugin.ToggleConfigUi();
 
-        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) && ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.F, false))
+        // Hors d'une zone de texte, Dalamud ne transmet pas la touche à ImGui : voir ShortcutKey.
+        var searchPressed = searchShortcut.Pressed();
+        var overChat = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) || ImGui.IsWindowHovered(ImGuiHoveredFlags.RootAndChildWindows);
+        if (searchPressed && overChat)
             ToggleSearch();
     }
 
