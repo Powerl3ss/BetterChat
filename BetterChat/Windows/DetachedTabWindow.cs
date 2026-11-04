@@ -16,6 +16,7 @@ public sealed class DetachedTabWindow : Window
     private readonly Plugin plugin;
     private readonly ChatWindow chat;
     private readonly MessageList messages;
+    private readonly ChatInputBar input;
 
     private IDisposable? windowStyle;
     private IDisposable? windowColors;
@@ -26,14 +27,16 @@ public sealed class DetachedTabWindow : Window
         this.plugin = plugin;
         this.chat = chat;
         Tab = tab;
-        messages = new MessageList(plugin, chat);
+        messages = new MessageList(plugin);
+        input = new ChatInputBar(plugin, messages) { ClickedIn = OnClickedIn };
+        messages.Input = input;
 
         RespectCloseHotkey = false;
         Size = new Vector2(360, 220);
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(200, 100),
+            MinimumSize = new Vector2(240, 140),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
     }
@@ -42,7 +45,21 @@ public sealed class DetachedTabWindow : Window
 
     private Configuration Cfg => plugin.Configuration;
 
-    public override bool DrawConditions() => Cfg.ChatVisible && Plugin.CurrentCharacterId != 0 && !HiddenByGame;
+    public override bool DrawConditions()
+    {
+        if (Cfg.ChatVisible && Plugin.CurrentCharacterId != 0 && !HiddenByGame)
+            return true;
+
+        input.ReleaseFocus();
+        return false;
+    }
+
+    /// <summary>Écrire ici passe sur le canal choisi pour cet onglet, s'il y en a un : la fenêtre de la CL écrit à la CL.</summary>
+    private void OnClickedIn()
+    {
+        if (Tab.InputChannel != ChatKind.Other)
+            plugin.Game.SwitchChannel(Tab.InputChannel);
+    }
 
     public override void PreDraw()
     {
@@ -50,9 +67,13 @@ public sealed class DetachedTabWindow : Window
         var viewport = ImGuiHelpers.MainViewport;
         ImGui.SetNextWindowPos(viewport.Pos + new Vector2(viewport.Size.X - 400f * S, viewport.Size.Y * 0.35f), ImGuiCond.FirstUseEver);
 
+        // Chaque fenêtre détachée a son propre verrou, indépendant de celui du chat.
         Flags = BaseFlags;
-        if (Cfg.Locked)
+        if (Tab.Locked)
             Flags |= ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize;
+
+        if (input.FocusRequested)
+            ImGui.SetNextWindowFocus();
 
         PushWindowStyle(Cfg, out windowStyle, out windowColors);
     }
@@ -78,11 +99,15 @@ public sealed class DetachedTabWindow : Window
         {
             var size = ImGui.GetWindowSize();
             var headerH = MathF.Round(ImGui.GetTextLineHeight() + 12f * S);
+            var inputH = MathF.Round(ImGui.GetTextLineHeight() + 20f * S);
 
             DrawHeader(feed, size, headerH);
 
             ImGui.SetCursorPos(new Vector2(0f, headerH));
-            messages.Draw(feed, new Vector2(size.X, MathF.Max(size.Y - headerH, 10f)));
+            messages.Draw(feed, new Vector2(size.X, MathF.Max(size.Y - headerH - inputH, 10f)));
+
+            ImGui.SetCursorPos(new Vector2(0f, size.Y - inputH));
+            input.Draw(size, inputH);
         }
     }
 
@@ -123,9 +148,9 @@ public sealed class DetachedTabWindow : Window
                 plugin.OpenConfigAtTabs();
 
             Tip.MenuSeparator();
-            if (Tip.MenuItem("Fenêtres verrouillées", FontAwesomeIcon.Lock, toggled: Cfg.Locked))
+            if (Tip.MenuItem("Fenêtre verrouillée", FontAwesomeIcon.Lock, toggled: Tab.Locked))
             {
-                Cfg.Locked = !Cfg.Locked;
+                Tab.Locked = !Tab.Locked;
                 Cfg.Save();
             }
 

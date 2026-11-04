@@ -602,7 +602,10 @@ public sealed partial class ConfigWindow : Window, IDisposable
             using (ImRaii.Disabled(!tab.Detached && !plugin.CanDetachTab))
                 ToggleRow("Dans sa propre fenêtre", "L'onglet sort du chat, pour le placer où tu veux : le combat dans un coin de l'écran, par exemple.", tab.Detached, v => plugin.SetDetached(tab, v));
 
-            SettingRow("Canal à l'ouverture", "En ouvrant cet onglet, la saisie passe sur ce canal.", 220f * S, () =>
+            if (tab.Detached)
+                changed |= ToggleRow("Verrouiller cette fenêtre", "Ni déplacement ni redimensionnement. Indépendant du verrou du chat.", tab.Locked, v => tab.Locked = v);
+
+            SettingRow("Canal à l'ouverture", "En ouvrant cet onglet, ou en cliquant dans la saisie de sa fenêtre détachée, la saisie passe sur ce canal.", 220f * S, () =>
             {
                 ImGui.SetNextItemWidth(220f * S);
                 using var combo = ImRaii.Combo("##tabChannel", tab.InputChannel == ChatKind.Other ? "Ne rien changer" : ChatKinds.Info(tab.InputChannel).Label);

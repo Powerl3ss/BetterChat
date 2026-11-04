@@ -61,6 +61,9 @@ public sealed class Plugin : IDalamudPlugin
     public RecentTells RecentTells { get; } = new();
     public CommandSuggester Commands { get; } = new();
 
+    /// <summary>Les messages déjà envoyés, rappelés avec les flèches depuis n'importe quelle zone de saisie.</summary>
+    public InputHistory SentMessages { get; } = new();
+
     public List<ChatFeed> Feeds { get; } = new();
 
     private readonly SpamFilter spam = new();
@@ -461,6 +464,9 @@ public sealed class Plugin : IDalamudPlugin
             return;
 
         tab.Detached = detached;
+        if (detached)
+            tab.Locked = false; // une fenêtre qui vient de sortir doit pouvoir être placée
+
         FeedFor(tab)?.SetSearch(string.Empty); // la recherche du chat ne le concerne plus
         KeepActiveTabAttached();
         detachedWindowsDirty = true;

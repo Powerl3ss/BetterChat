@@ -40,6 +40,7 @@ public sealed partial class ChatWindow : Window, IDisposable
     internal static float S => ImGuiHelpers.GlobalScale;
 
     private readonly MessageList messages;
+    private readonly ChatInputBar input;
 
     // Police à sa vraie taille : agrandir le texte avec SetWindowFontScale le rend flou.
     private IFontHandle? chatFont;
@@ -61,11 +62,15 @@ public sealed partial class ChatWindow : Window, IDisposable
             MinimumSize = new Vector2(300, 140),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
-        inputCallback = OnInputCallback;
-        messages = new MessageList(plugin, this);
+        messages = new MessageList(plugin);
+        input = new ChatInputBar(plugin, messages);
+        messages.Input = input;
     }
 
     public void Dispose() => chatFont?.Dispose();
+
+    /// <summary>Le joueur a appuyé sur la touche qui ouvre le chat : la saisie de la fenêtre principale la reçoit.</summary>
+    public void OnGameActivated(string? text) => input.OnGameActivated(text);
 
     /// <summary>Vrai si la fenêtre a été dessinée à l'instant : sinon, seule la zone de saisie du jeu peut servir.</summary>
     public bool IsShownNow => IsOpen && (DateTime.UtcNow - lastDraw).TotalSeconds < 0.5;
@@ -83,9 +88,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         if (Plugin.CurrentCharacterId != 0 && !HiddenByGame)
             return true;
 
-        // La zone de saisie disparaît avec la fenêtre. Le texte en cours reste, mais elle ne reprendra pas le focus seule.
-        inputActive = false;
-        focusRequested = false;
+        input.ReleaseFocus();
         return false;
     }
 
@@ -99,7 +102,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         if (Cfg.Locked)
             Flags |= ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize;
 
-        if (focusRequested)
+        if (input.FocusRequested)
             ImGui.SetNextWindowFocus();
 
         PushWindowStyle(Cfg, out windowStyle, out windowColors);
@@ -164,7 +167,7 @@ public sealed partial class ChatWindow : Window, IDisposable
             messages.Draw(plugin.ActiveFeed, new Vector2(size.X, MathF.Max(size.Y - tabH - searchH - inputH, 10f)));
 
             ImGui.SetCursorPos(new Vector2(0, size.Y - inputH));
-            DrawInputBar(size, inputH);
+            input.Draw(size, inputH);
         }
     }
 

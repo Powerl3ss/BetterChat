@@ -74,6 +74,9 @@ public sealed class ChatTabSettings
     /// <summary>L'onglet est sorti dans sa propre fenêtre.</summary>
     public bool Detached { get; set; }
 
+    /// <summary>Fenêtre détachée impossible à déplacer ou à redimensionner. Indépendant du verrou du chat.</summary>
+    public bool Locked { get; set; }
+
     public List<ChatKind> Kinds { get; set; } = new();
 
     /// <summary>Pour le combat : n'afficher que soi, ou soi et le groupe.</summary>

@@ -7,18 +7,26 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using BetterChat.Chat;
 using BetterChat.Core;
+using static BetterChat.Windows.ChatWindow;
 
 namespace BetterChat.Windows;
 
-/// <summary>La zone de saisie : canal, texte, historique, commandes proposées.</summary>
-public sealed partial class ChatWindow
+/// <summary>
+/// La zone de saisie : canal, texte, historique, commandes proposées. Le chat en a une, et chaque onglet détaché a
+/// la sienne. Le canal reste celui du jeu : il est le même pour toutes.
+/// </summary>
+public sealed class ChatInputBar
 {
     private const int MaxSuggestions = 8;
     private const int InputBufferBytes = 2048;
     private const float ErrorSeconds = 4f;
 
     private readonly ImGui.ImGuiInputTextCallbackPtrDelegate inputCallback;
-    private readonly InputHistory history = new();
+    private readonly InputHistory history;
+    private readonly Plugin plugin;
+    private readonly MessageList messages;
+
+    private bool focusedByCode;
 
     private string inputText = string.Empty;
     private bool inputActive;
@@ -41,6 +49,35 @@ public sealed partial class ChatWindow
     private string? inputError;
     private double inputErrorUntil;
 
+    public ChatInputBar(Plugin plugin, MessageList messages)
+    {
+        this.plugin = plugin;
+        this.messages = messages;
+        history = plugin.SentMessages;
+        inputCallback = OnInputCallback;
+    }
+
+    private Configuration Cfg => plugin.Configuration;
+    private Vector4 Accent => Cfg.AccentColor with { W = 1f };
+
+    /// <summary>Appelé quand on clique dans la zone pour écrire.</summary>
+    public Action? ClickedIn { get; set; }
+
+    /// <summary>La fenêtre doit passer au premier plan pour que la zone prenne le clavier.</summary>
+    public bool FocusRequested => focusRequested;
+
+    /// <summary>La fenêtre disparaît. Le texte en cours reste, mais la zone ne reprendra pas le focus seule.</summary>
+    public void ReleaseFocus()
+    {
+        inputActive = false;
+        focusRequested = false;
+    }
+
+    private float Measure(string text) => messages.Measure(text);
+
+    private void DrawOutlinedText(ImDrawListPtr drawList, Vector2 pos, Vector4 color, string text) =>
+        messages.DrawOutlinedText(drawList, pos, color, text);
+
     // ------------------------------------------------------------ Depuis le jeu
 
     /// <summary>Le joueur a appuyé sur la touche qui ouvre le chat. Appelé depuis la boucle du jeu.</summary>
@@ -56,10 +93,10 @@ public sealed partial class ChatWindow
     // Avec « discussion directe », la lettre qui ouvre le chat est encore dans la file d'ImGui à cette image.
     private bool directChatPending;
 
-    internal void FocusInput() => focusRequested = true;
+    public void FocusInput() => focusRequested = true;
 
     /// <summary>Ajoute un texte à la fin de la saisie et y donne le focus (lien d'objet...).</summary>
-    internal void AppendToInput(string text)
+    public void AppendToInput(string text)
     {
         AppendText(text);
         focusRequested = true;
@@ -87,7 +124,7 @@ public sealed partial class ChatWindow
 
     // ------------------------------------------------------------ Dessin
 
-    private void DrawInputBar(Vector2 size, float height)
+    public void Draw(Vector2 size, float height)
     {
         var pad = EdgeMargin * S;
         var drawList = ImGui.GetWindowDrawList();
@@ -368,6 +405,7 @@ public sealed partial class ChatWindow
         {
             ImGui.SetKeyboardFocusHere();
             focusRequested = false;
+            focusedByCode = true;
             cursorToEnd = true;
             plugin.RefreshCommandsIfNeeded();
             AbsorbDirectChatLetter();
@@ -379,7 +417,15 @@ public sealed partial class ChatWindow
             ImGuiInputTextFlags.CallbackHistory | ImGuiInputTextFlags.CallbackCompletion;
 
         var submitted = ImGui.InputTextWithHint("##chatInput", "Écris ton message...", ref inputText, InputBufferBytes, Flags, inputCallback);
+
+        var wasActive = inputActive;
         inputActive = ImGui.IsItemActive();
+        if (inputActive && !wasActive)
+        {
+            if (!focusedByCode)
+                ClickedIn?.Invoke();
+            focusedByCode = false;
+        }
 
         if (inputActive && inputText.Length > 0 && inputText[0] == '/')
             plugin.RefreshCommandsIfNeeded();

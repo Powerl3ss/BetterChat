@@ -81,13 +81,14 @@ public sealed class MessageList
     private bool openPlayerColor;
 
     private readonly Plugin plugin;
-    private readonly ChatWindow chat;
 
-    public MessageList(Plugin plugin, ChatWindow chat)
+    public MessageList(Plugin plugin)
     {
         this.plugin = plugin;
-        this.chat = chat;
     }
+
+    /// <summary>La saisie de la même fenêtre : un lien ou un message privé s'y prépare.</summary>
+    public ChatInputBar? Input { get; set; }
 
     private Configuration Cfg => plugin.Configuration;
     private Vector4 Accent => Cfg.AccentColor with { W = 1f };
@@ -738,7 +739,7 @@ public sealed class MessageList
                     if (Tip.MenuItem("Lier dans le chat", FontAwesomeIcon.Link))
                     {
                         GameChat.LinkItem(contextLink.Id);
-                        chat.AppendToInput("<item>");
+                        Input?.AppendToInput("<item>");
                     }
                     if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))
                         ImGui.SetClipboardText(name);
@@ -825,7 +826,7 @@ public sealed class MessageList
         if (player.Text != plugin.LocalName && Tip.MenuItem("Envoyer un message privé", FontAwesomeIcon.Envelope))
         {
             plugin.Game.SwitchToTell(player);
-            chat.FocusInput();
+            Input?.FocusInput();
         }
 
         if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))

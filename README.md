@@ -20,7 +20,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 **Lire**
 - Deux présentations : moderne (le nom au-dessus de messages regroupés par auteur) ou compacte (tout sur une ligne).
 - Onglets à ta façon : chacun choisit ses canaux. Pastille de messages non lus, rouge pour une mention ou un message privé.
-- Onglets détachables : sors un onglet dans sa propre fenêtre, par exemple le combat ou la compagnie libre dans un coin de l'écran.
+- Onglets détachables : sors un onglet dans sa propre fenêtre avec sa zone de saisie et son propre verrou, par exemple le combat ou la compagnie libre dans un coin de l'écran.
 - Recherche dans l'onglet affiché (Ctrl + F), par mot, joueur, canal ou date : `de:Jean canal:CL date:hier`.
 - Noms, objets, cartes, quêtes, effets, annonces de recherche de groupe et adresses web cliquables. Survoler un objet, une quête ou un effet montre ses détails. Une adresse s'affiche en entier avant de s'ouvrir.
 - Une ligne à chaque reconnexion, et une autre quand la date change.
@@ -85,7 +85,8 @@ BetterChat/
 │   └── ChatHistoryStore.cs messages enregistrés sur le disque
 ├── images/                 logo
 └── Windows/
-    ├── ChatWindow*.cs      la fenêtre de chat : onglets, saisie
+    ├── ChatWindow*.cs      la fenêtre de chat et ses onglets
+    ├── ChatInputBar.cs     la zone de saisie, commune au chat et aux onglets détachés
     ├── MessageList.cs      la liste des messages, commune au chat et aux onglets détachés
     ├── DetachedTabWindow.cs un onglet dans sa propre fenêtre
     └── ConfigWindow*.cs    les réglages (même base que DailyToDo et DPSmeter)
