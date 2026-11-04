@@ -249,7 +249,7 @@ public sealed class Plugin : IDalamudPlugin
             History.Enqueue(line);
     }
 
-    /// <summary>Le job de l'auteur, s'il est dans le groupe, assez près, ou dans une liste que le jeu a déjà chargée.</summary>
+    /// <summary>Le job de l'auteur, s'il est dans le groupe ou assez près pour que le jeu le connaisse.</summary>
     private static uint JobOfAuthor(ChatLine line, bool isOwn)
     {
         if (!ChatKinds.Info(line.Kind).HasAuthor)
@@ -274,7 +274,7 @@ public sealed class Plugin : IDalamudPlugin
                 return player.ClassJob.RowId;
         }
 
-        return GameChat.JobFromSocialLists(name);
+        return 0;
     }
 
     /// <summary>L'historique est lu : il passe avant les messages arrivés entre-temps, qui sont alors écrits à leur tour.</summary>
