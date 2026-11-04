@@ -944,8 +944,6 @@ public sealed class MessageList
 
                 case LinkKind.Item:
                     var name = ItemName(contextLink.Id);
-                    Tip.MenuTitle(name);
-                    Tip.MenuSeparator();
                     if (GameChat.HasRecipe(contextLink.Id) && Tip.MenuItem("Voir le craft", FontAwesomeIcon.Hammer))
                         GameChat.OpenRecipe(contextLink.Id);
                     if (Tip.MenuItem("Lier dans le chat", FontAwesomeIcon.Link))
