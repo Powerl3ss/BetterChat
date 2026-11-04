@@ -219,13 +219,7 @@ public sealed class ChatInputBar
         ImGui.SetNextWindowPos(pillMin - new Vector2(0f, 6f * S), ImGuiCond.Always, new Vector2(0f, 1f));
         using var tooltip = Tip.Begin();
 
-        var start = ImGui.GetCursorScreenPos();
-        var dotRadius = 3.5f * S;
-        ImGui.GetWindowDrawList().AddCircleFilled(start + new Vector2(dotRadius, ImGui.GetTextLineHeight() / 2f), dotRadius, Col(color));
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + dotRadius * 2f + 6f * S);
-        ImGui.TextColored(color, label);
-
-        ImGui.Dummy(new Vector2(0f, 2f * S));
+        Tip.DotLine(color, label);
         Tip.Hint("Clic : changer de canal");
         Tip.Hint("Tab dans la saisie : canal suivant");
     }
@@ -576,13 +570,19 @@ public sealed class ChatInputBar
 
         using var tooltip = Tip.Begin();
 
+        // Les descriptions commencent toutes au même endroit, après la commande la plus longue.
+        var commandW = 0f;
+        foreach (var suggestion in suggestions)
+            commandW = MathF.Max(commandW, ImGui.CalcTextSize(suggestion.Command).X);
+
+        var left = ImGui.GetCursorPosX();
         for (var i = 0; i < suggestions.Count; i++)
         {
             var suggestion = suggestions[i];
             ImGui.TextColored(i == selectedSuggestion ? Accent : TextMain, suggestion.Command);
             if (suggestion.Description.Length > 0)
             {
-                ImGui.SameLine(0, 12f * S);
+                ImGui.SameLine(left + commandW + 12f * S);
                 ImGui.TextColored(TextDim, Shorten(suggestion.Description, 60));
             }
         }

@@ -829,16 +829,23 @@ public sealed class MessageList
 
         using var tooltip = Tip.Begin();
 
+        var hasLevel = item.Value.LevelItem.RowId > 1;
         var icon = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(item.Value.Icon));
         if (icon.TryGetWrap(out var wrap, out _) && wrap != null)
         {
-            ImGui.Image(wrap.Handle, new Vector2(40f, 40f) * S);
+            var iconSize = 40f * S;
+            ImGui.Image(wrap.Handle, new Vector2(iconSize, iconSize));
             ImGui.SameLine();
+
+            // Le texte se centre sur la hauteur de l'image.
+            var lines = hasLevel ? 2 : 1;
+            var textH = lines * ImGui.GetTextLineHeight() + (lines - 1) * Tip.Spacing.Y;
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + MathF.Round((iconSize - textH) / 2f));
         }
 
         ImGui.BeginGroup();
         Tip.Title(item.Value.Name.ExtractText());
-        if (item.Value.LevelItem.RowId > 1)
+        if (hasLevel)
             Tip.Note($"Niveau d'objet {item.Value.LevelItem.RowId}");
         ImGui.EndGroup();
     }
