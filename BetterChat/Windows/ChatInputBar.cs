@@ -241,7 +241,7 @@ public sealed class ChatInputBar
         var channels = channelMenu?.Count ?? 0;
         var tells = plugin.RecentTells.People.Count;
         var rowStep = ChannelRowHeight + 2f * S;
-        var headers = (tells > 0 ? 2 : 1) * (ImGui.GetTextLineHeight() + 22f * S);
+        var headers = tells > 0 ? ImGui.GetTextLineHeight() + 27f * S : 0f;
         var estimatedHeight = (channels + tells) * rowStep + headers + 16f * S;
         var fitsAbove = channelPillMin.Y - gap - estimatedHeight >= ImGuiHelpers.MainViewport.Pos.Y;
 
@@ -277,7 +277,6 @@ public sealed class ChatInputBar
         }
         var rowW = MathF.Max(200f * S, 24f * S + nameW + 24f * S + detailW + 30f * S);
 
-        MenuHeader(FontAwesomeIcon.CommentDots, "Canal de discussion");
         for (var i = 0; i < channels.Count; i++)
         {
             var choice = channels[i];
