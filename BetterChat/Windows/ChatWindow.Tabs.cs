@@ -97,8 +97,11 @@ public sealed partial class ChatWindow
         if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize, "Réglages\nClic droit sur un onglet : ses options"))
             plugin.ToggleConfigUi();
 
-        // Hors d'une zone de texte, Dalamud ne transmet pas la touche à ImGui : voir ShortcutKey.
+        // Hors d'une zone de texte, Dalamud ne transmet pas la touche à ImGui : voir ShortcutKey. Pendant la saisie,
+        // c'est l'inverse : le jeu ne la voit plus, et seul ImGui la reçoit.
         var searchPressed = searchShortcut.Pressed();
+        if (ImGui.GetIO().WantTextInput)
+            searchPressed = ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.F, false);
         var overChat = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) || ImGui.IsWindowHovered(ImGuiHoveredFlags.RootAndChildWindows);
         if (searchPressed && overChat)
             ToggleSearch();
