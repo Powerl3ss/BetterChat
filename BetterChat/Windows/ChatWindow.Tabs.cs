@@ -11,18 +11,11 @@ namespace BetterChat.Windows;
 public sealed partial class ChatWindow
 {
     private const float TabPadding = EdgeMargin;
-    private const float SearchRevealSpeed = 14f;
     private const float BadgeGap = 6f;
     private const float BadgeDotSize = 6f;
     private const float BadgeDotGap = 3f;
 
     private int menuTab = -1;
-    private bool searchOpen;
-    private bool focusSearch;
-    private string searchText = string.Empty;
-
-    // Ouverture de la barre de recherche : 0 = fermée, 1 = entièrement sortie.
-    private float searchReveal;
 
     // Soulignement de l'onglet actif : il glisse jusqu'au nouvel onglet.
     private float underlineX;
@@ -81,18 +74,18 @@ public sealed partial class ChatWindow
 
         // Boutons à droite.
         ImGui.SetCursorPos(new Vector2(searchX, iconY));
-        if (IconButton("##search", FontAwesomeIcon.Search, iconSize, "Rechercher dans cet onglet", searchOpen))
-            ToggleSearch();
+        if (IconButton("##search", FontAwesomeIcon.Search, iconSize, search.IsOpen))
+            search.Toggle();
 
         ImGui.SetCursorPos(new Vector2(pinX, iconY));
-        if (IconButton("##pin", FontAwesomeIcon.Thumbtack, iconSize, Cfg.Locked ? "Position verrouillée\nClic : déverrouiller" : "Verrouiller la position", Cfg.Locked))
+        if (IconButton("##pin", FontAwesomeIcon.Thumbtack, iconSize, Cfg.Locked))
         {
             Cfg.Locked = !Cfg.Locked;
             Cfg.Save();
         }
 
         ImGui.SetCursorPos(new Vector2(settingsX, iconY));
-        if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize, "Réglages\nClic droit sur un onglet : ses options"))
+        if (IconButton("##settings", FontAwesomeIcon.Cog, iconSize))
             plugin.ToggleConfigUi();
     }
 
@@ -223,9 +216,6 @@ public sealed partial class ChatWindow
 
         if (badge != null)
             DrawBadge(badge, textEnd + BadgeGap * S, textY, feed.UnreadMentions > 0);
-
-        if (hovered && size.X < ImGui.CalcTextSize(feed.Settings.Name).X + TabPadding * 2f * S)
-            Tip.Show(feed.Settings.Name);
     }
 
     private void MoveUnderline(float x, float width)
@@ -271,85 +261,4 @@ public sealed partial class ChatWindow
     }
 
     // ------------------------------------------------------------ Recherche
-
-    private void ToggleSearch()
-    {
-        searchOpen = !searchOpen;
-        focusSearch = searchOpen;
-        if (!searchOpen)
-            ApplySearch(string.Empty);
-    }
-
-    private void ApplySearch(string text)
-    {
-        searchText = text;
-        foreach (var feed in plugin.Feeds)
-            feed.SetSearch(feed.Settings.Detached ? string.Empty : text);
-    }
-
-    /// <summary>Fait avancer l'animation et renvoie la hauteur occupée en ce moment, sur un nombre entier de pixels.</summary>
-    private float UpdateSearchReveal(float fullHeight)
-    {
-        var target = searchOpen ? 1f : 0f;
-        var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
-        searchReveal += (target - searchReveal) * (1f - MathF.Exp(-SearchRevealSpeed * dt));
-        if (MathF.Abs(target - searchReveal) < 0.005f)
-            searchReveal = target;
-
-        return MathF.Round(fullHeight * searchReveal);
-    }
-
-    /// <summary>La barre glisse depuis le dessous des onglets en apparaissant, et les messages descendent pour lui faire place.</summary>
-    private void DrawRevealedSearchBar(Vector2 size, float tabHeight, float shown, float fullHeight)
-    {
-        var origin = ImGui.GetWindowPos();
-        ImGui.PushClipRect(origin + new Vector2(0f, tabHeight), origin + new Vector2(size.X, tabHeight + shown), true);
-        using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(searchReveal, 0.001f) * ImGui.GetStyle().Alpha))
-            DrawSearchBar(size, tabHeight + shown - fullHeight, fullHeight);
-        ImGui.PopClipRect();
-    }
-
-    private static void DrawSearchHelp()
-    {
-        using var tooltip = Tip.Begin();
-        Tip.Title("Recherche avancée");
-        Tip.Note("Des mots : dans le nom et dans le texte");
-        Tip.Note("de:Jean : par joueur");
-        Tip.Note("canal:CL : par canal (groupe, mp, crier...)");
-        Tip.Note("date:hier ou date:03/11 : par jour");
-        Tip.Hint("Des guillemets gardent une expression entière");
-    }
-
-    private void DrawSearchBar(Vector2 size, float top, float height)
-    {
-        var margin = EdgeMargin * S;
-        var gap = 6f * S;
-        var close = IconButtonSize;
-        var closeX = RightButtonX(size.X, FontAwesomeIcon.Cog, close); // dans la même colonne que l'engrenage
-
-        ImGui.SetCursorPos(new Vector2(margin, MathF.Round(top + (height - ImGui.GetFrameHeight()) / 2f)));
-        ImGui.SetNextItemWidth(closeX - gap - margin);
-        // Attend que la barre soit assez sortie : une zone encore hors du cadre ne peut pas prendre le focus.
-        if (focusSearch && searchReveal >= 0.5f)
-        {
-            ImGui.SetKeyboardFocusHere();
-            focusSearch = false;
-        }
-
-        var text = searchText;
-        ImGui.PushStyleColor(ImGuiCol.FrameBg, InputBg);
-        if (ImGui.InputTextWithHint("##searchInput", "Rechercher... (de:Jean canal:CL date:hier)", ref text, 128))
-            ApplySearch(text);
-        ImGui.PopStyleColor();
-
-        if (ImGui.IsItemHovered() && !ImGui.IsItemActive())
-            DrawSearchHelp();
-
-        // Échap quitte d'abord la zone de texte : c'est à ce moment-là qu'on ferme la recherche.
-        var escape = ImGui.IsItemDeactivated() && ImGui.IsKeyPressed(ImGuiKey.Escape, false);
-
-        ImGui.SetCursorPos(new Vector2(closeX, MathF.Round(top + (height - close) / 2f)));
-        if (IconButton("##closeSearch", FontAwesomeIcon.Times, close, "Fermer la recherche") || escape)
-            ToggleSearch();
-    }
 }

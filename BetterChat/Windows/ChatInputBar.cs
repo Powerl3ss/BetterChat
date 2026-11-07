@@ -172,7 +172,7 @@ public sealed class ChatInputBar
 
         ImGui.SameLine(0, 4f * S);
         ImGui.SetCursorPosY(rowY);
-        if (chat.IconButton("##autoTranslateButton", FontAwesomeIcon.Language, rowH, null, autoTranslateOpen))
+        if (chat.IconButton("##autoTranslateButton", FontAwesomeIcon.Language, rowH, autoTranslateOpen))
             OpenAutoTranslate(toggle: true);
     }
 
@@ -294,7 +294,7 @@ public sealed class ChatInputBar
         var escape = deactivated && ImGui.IsKeyPressed(ImGuiKey.Escape, false);
 
         ImGui.SetCursorPos(new Vector2(closeX, MathF.Round(top + (height - close) / 2f)));
-        if (chat.IconButton("##closeAutoTranslate", FontAwesomeIcon.Times, close, null) || escape)
+        if (chat.IconButton("##closeAutoTranslate", FontAwesomeIcon.Times, close) || escape)
             CloseAutoTranslate();
         else if (enter && autoTranslateResults.Count > 0)
             PickAutoTranslate(autoTranslateResults[autoTranslateSelected]);
@@ -449,21 +449,7 @@ public sealed class ChatInputBar
         DrawOutlinedText(drawList, textPos, color, label);
         drawList.PopClipRect();
 
-        if (hovered)
-            DrawChannelTooltip(min, label, color);
-
         return size.X;
-    }
-
-    /// <summary>Infobulle posée au-dessus de la pastille, sans la cacher : elle ne suit pas la souris.</summary>
-    private static void DrawChannelTooltip(Vector2 pillMin, string label, Vector4 color)
-    {
-        ImGui.SetNextWindowPos(pillMin - new Vector2(0f, 6f * S), ImGuiCond.Always, new Vector2(0f, 1f));
-        using var tooltip = Tip.Begin();
-
-        Tip.DotLine(color, label);
-        Tip.Hint("Clic : changer de canal");
-        Tip.Hint("Tab dans une saisie vide : canal suivant");
     }
 
     // Menu des canaux : une ligne par canal (point et nom de sa couleur, commande à droite),

@@ -84,17 +84,10 @@ public sealed partial class ChatWindow
         if (badge != null)
             DrawBadge(badge, min.X + padX + labelW + 6f * S, textY, true);
 
-        if (conversation != null && hovered)
+        if (conversation != null && hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
         {
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
-            {
-                conversationMenuKey = conversation.Key;
-                ImGui.OpenPopup(ConversationMenu);
-            }
-            else
-            {
-                Tip.Show($"{conversation.Person.TellTarget}\nClic : voir la conversation et lui répondre\nClic droit : fermer la conversation");
-            }
+            conversationMenuKey = conversation.Key;
+            ImGui.OpenPopup(ConversationMenu);
         }
 
         x += width + 6f * S;

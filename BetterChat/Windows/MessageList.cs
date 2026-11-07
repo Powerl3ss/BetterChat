@@ -683,24 +683,8 @@ public sealed class MessageList
             ImGui.OpenPopup("##pinnedMenu");
         }
 
-        if (hovered && !rightClicked)
-            DrawPinnedTooltip(pin, pins.Count > 1);
-
         DrawPinnedMenu(feed);
         ImGui.SetCursorPos(start + new Vector2(0f, height));
-    }
-
-    private void DrawPinnedTooltip(PinnedMessage pin, bool several)
-    {
-        using var tooltip = Tip.Begin();
-        Tip.Title(pin.Sender.Length > 0 ? pin.Sender : ChatKinds.Info(pin.Kind).Label);
-        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + 320f * S);
-        ImGui.TextUnformatted(pin.Text);
-        ImGui.PopTextWrapPos();
-        Tip.Note(pin.TimeUtc.ToLocalTime().ToString("dd/MM HH:mm"));
-        if (several)
-            Tip.Hint("Clic : message épinglé suivant");
-        Tip.Hint("Clic droit : copier, désépingler");
     }
 
     private void DrawPinnedMenu(ChatFeed feed)
@@ -912,23 +896,11 @@ public sealed class MessageList
             case LinkKind.Item:
                 DrawItemTooltip(link.Id);
                 break;
-            case LinkKind.Map:
-                Tip.Show($"{(link.Text.Length > 0 ? link.Text + "\n" : string.Empty)}Clic : ouvrir la carte");
-                break;
-            case LinkKind.Url:
-                Tip.Show($"{link.Text}\nClic : ouvrir le lien (une confirmation est demandée)");
-                break;
-            case LinkKind.Player:
-                Tip.Show($"{link.Text}{(link.World.Length > 0 ? " (" + link.World + ")" : string.Empty)}\nClic : message privé, copier, couleur, masquer");
-                break;
             case LinkKind.Quest:
                 DrawQuestTooltip(link.Id);
                 break;
             case LinkKind.Status:
                 DrawStatusTooltip(link.Id);
-                break;
-            case LinkKind.PartyFinder:
-                Tip.Show("Annonce de recherche de groupe\nClic : ouvrir l'annonce");
                 break;
         }
     }

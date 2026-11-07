@@ -41,6 +41,7 @@ public sealed partial class ChatWindow : Window, IDisposable
 
     private readonly MessageList messages;
     private readonly ChatInputBar input;
+    private readonly SearchBar search;
 
     // Police à sa vraie taille : agrandir le texte avec SetWindowFontScale le rend flou.
     private IFontHandle? chatFont;
@@ -65,6 +66,16 @@ public sealed partial class ChatWindow : Window, IDisposable
         messages = new MessageList(plugin);
         input = new ChatInputBar(plugin, messages, this);
         messages.Input = input;
+
+        // La recherche du chat s'applique à ses onglets. Un onglet détaché a sa propre recherche.
+        search = new SearchBar(this, text =>
+        {
+            foreach (var feed in plugin.Feeds)
+            {
+                if (!feed.Settings.Detached)
+                    feed.SetSearch(text);
+            }
+        });
     }
 
     public void Dispose() => chatFont?.Dispose();
@@ -145,8 +156,8 @@ public sealed partial class ChatWindow : Window, IDisposable
         lastDraw = DateTime.UtcNow;
 
         // Les onglets peuvent avoir été recréés entre-temps (réglages) : la recherche suit l'onglet affiché.
-        if (searchOpen)
-            plugin.ActiveFeed.SetSearch(searchText);
+        if (search.IsOpen)
+            plugin.ActiveFeed.SetSearch(search.Text);
 
         // La fenêtre n'a pas de marges, mais ses infobulles et ses menus en ont besoin.
         using var popupPadding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(10f, 8f) * S);
@@ -157,13 +168,12 @@ public sealed partial class ChatWindow : Window, IDisposable
             var size = ImGui.GetWindowSize();
             var tabH = MathF.Round(ImGui.GetTextLineHeight() + 14f * S);
             var inputH = MathF.Round(ImGui.GetTextLineHeight() + 20f * S);
-            var searchH = UpdateSearchReveal(inputH);
+            var searchH = search.Update(inputH);
 
             var tellsH = ConversationBarHeight();
 
             DrawTabBar(size, tabH);
-            if (searchH > 0f)
-                DrawRevealedSearchBar(size, tabH, searchH, inputH);
+            search.Draw(size, tabH, searchH, inputH, FontAwesomeIcon.Cog);
             if (tellsH > 0f)
                 DrawConversationBar(size, tabH + searchH, tellsH);
 
@@ -246,7 +256,7 @@ public sealed partial class ChatWindow : Window, IDisposable
         drawList.PathStroke(Col(color), ImDrawFlags.None, thickness);
     }
 
-    internal bool IconButton(string id, FontAwesomeIcon icon, float size, string? tooltip, bool active = false)
+    internal bool IconButton(string id, FontAwesomeIcon icon, float size, bool active = false)
     {
         var min = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton(id, new Vector2(size, size));
@@ -275,8 +285,6 @@ public sealed partial class ChatWindow : Window, IDisposable
         else
             ConfigWindow.DrawIconCentered(icon, min, min + new Vector2(size, size), color);
 
-        if (tooltip != null && hovered)
-            Tip.Show(tooltip);
         return clicked;
     }
 }

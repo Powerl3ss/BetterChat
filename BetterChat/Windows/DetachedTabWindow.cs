@@ -17,6 +17,7 @@ public sealed class DetachedTabWindow : Window
     private readonly ChatWindow chat;
     private readonly MessageList messages;
     private readonly ChatInputBar input;
+    private readonly SearchBar search;
 
     private IDisposable? windowStyle;
     private IDisposable? windowColors;
@@ -30,6 +31,7 @@ public sealed class DetachedTabWindow : Window
         messages = new MessageList(plugin);
         input = new ChatInputBar(plugin, messages, chat) { ClickedIn = OnClickedIn };
         messages.Input = input;
+        search = new SearchBar(chat, text => plugin.FeedFor(Tab)?.SetSearch(text));
 
         RespectCloseHotkey = false;
         Size = new Vector2(360, 220);
@@ -100,12 +102,18 @@ public sealed class DetachedTabWindow : Window
             var size = ImGui.GetWindowSize();
             var headerH = MathF.Round(ImGui.GetTextLineHeight() + 12f * S);
             var inputH = MathF.Round(ImGui.GetTextLineHeight() + 20f * S);
+            var searchH = search.Update(inputH);
+
+            // La recherche a pu être effacée en sortant l'onglet du chat : elle suit ce que montre la barre.
+            if (search.IsOpen)
+                feed.SetSearch(search.Text);
 
             DrawHeader(feed, size, headerH);
+            search.Draw(size, headerH, searchH, inputH, FontAwesomeIcon.SignInAlt);
 
-            ImGui.SetCursorPos(new Vector2(0f, headerH));
+            ImGui.SetCursorPos(new Vector2(0f, headerH + searchH));
             var translateH = input.AutoTranslateHeight(inputH);
-            messages.Draw(feed, new Vector2(size.X, MathF.Max(size.Y - headerH - translateH - inputH, 10f)));
+            messages.Draw(feed, new Vector2(size.X, MathF.Max(size.Y - headerH - searchH - translateH - inputH, 10f)));
             input.DrawAutoTranslateBar(size, size.Y - inputH, translateH, inputH);
 
             ImGui.SetCursorPos(new Vector2(0f, size.Y - inputH));
@@ -119,7 +127,8 @@ public sealed class DetachedTabWindow : Window
         var origin = ImGui.GetWindowPos();
         var iconSize = IconButtonSize;
         var reattachX = RightButtonX(size.X, FontAwesomeIcon.SignInAlt, iconSize);
-        var buttonX = reattachX - iconSize - 2f * S; // l'épingle, le premier des deux boutons
+        var pinX = reattachX - iconSize - 2f * S;
+        var buttonX = pinX - iconSize - 2f * S; // la loupe, le premier des trois boutons
 
         var textPos = origin + new Vector2(EdgeMargin * S, MathF.Floor((height - ImGui.GetTextLineHeight()) / 2f));
         drawList.PushClipRect(origin, origin + new Vector2(buttonX - 4f * S, height), true);
@@ -133,14 +142,18 @@ public sealed class DetachedTabWindow : Window
             ImGui.OpenPopup("##detachedMenu");
 
         ImGui.SetCursorPos(new Vector2(buttonX, MathF.Round((height - iconSize) / 2f)));
-        if (chat.IconButton("##pin", FontAwesomeIcon.Thumbtack, iconSize, Tab.Locked ? "Position verrouillée\nClic : déverrouiller" : "Verrouiller la position", Tab.Locked))
+        if (chat.IconButton("##search", FontAwesomeIcon.Search, iconSize, search.IsOpen))
+            search.Toggle();
+
+        ImGui.SetCursorPos(new Vector2(pinX, MathF.Round((height - iconSize) / 2f)));
+        if (chat.IconButton("##pin", FontAwesomeIcon.Thumbtack, iconSize, Tab.Locked))
         {
             Tab.Locked = !Tab.Locked;
             Cfg.Save();
         }
 
         ImGui.SetCursorPos(new Vector2(reattachX, MathF.Round((height - iconSize) / 2f)));
-        if (chat.IconButton("##reattach", FontAwesomeIcon.SignInAlt, iconSize, "Remettre dans le chat\nClic droit sur l'en-tête : ses options"))
+        if (chat.IconButton("##reattach", FontAwesomeIcon.SignInAlt, iconSize))
             plugin.SetDetached(Tab, false);
 
         if (Tip.BeginMenu("##detachedMenu"))
