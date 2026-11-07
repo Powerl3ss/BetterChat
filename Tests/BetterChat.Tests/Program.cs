@@ -36,6 +36,7 @@ var tests = new (string Name, Action Run)[]
     ("Recherche : dates relatives et formats", Tests.SearchDates),
     ("Recherche : préfixe inconnu ou date illisible restent du texte", Tests.SearchUnknownPrefixIsText),
     ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
+    ("Icône du nom : rôle de chaque job", Tests.RoleIcons),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
     ("Joueur : le monde « Dev » du jeu n'est pas un vrai monde", Tests.PlaceholderWorldIgnored),
@@ -1340,5 +1341,16 @@ internal static class Tests
         store.Flush();
 
         Same(0, Store(directory).Load(10).Count, "plus rien");
+    }
+
+    public static void RoleIcons()
+    {
+        Same(NameIcons.TankIcon, NameIcons.RoleIcon(37), "pistosabreur");
+        Same(NameIcons.HealerIcon, NameIcons.RoleIcon(40), "sage");
+        Same(NameIcons.MeleeIcon, NameIcons.RoleIcon(41), "rôdeur vipère");
+        Same(NameIcons.RangedIcon, NameIcons.RoleIcon(38), "danseur");
+        Same(NameIcons.CasterIcon, NameIcons.RoleIcon(42), "pictomancien");
+        Same(NameIcons.JobIcon(8), NameIcons.RoleIcon(8), "un artisan garde son icône de job");
+        Same(0u, NameIcons.JobIcon(0), "job inconnu");
     }
 }

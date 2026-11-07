@@ -136,6 +136,14 @@ public sealed class Plugin : IDalamudPlugin
         if (Configuration.Tabs.Count == 0)
             Configuration.Tabs = ChatTabPresets.Default();
 
+        // Version 2 : l'icône à côté du nom se choisit (job, rôle, statut). Les icônes coupées le restent.
+        if (Configuration.Version < 2)
+        {
+            if (!Configuration.ShowJobIcons)
+                Configuration.NameIcon = NameIconKind.None;
+            Configuration.Version = 2;
+        }
+
         Game = new GameChat();
         Game.AutoTranslate.Preload();
         Players = new PlayerActions();
@@ -234,7 +242,7 @@ public sealed class Plugin : IDalamudPlugin
 
         // Tes propres messages n'ont pas de lien sur ton nom, et il peut être précédé de ton numéro de groupe.
         var isOwn = LocalName.Length > 0 && line.AuthorKey.EndsWith(LocalName, StringComparison.Ordinal);
-        line.AuthorJob = JobOfAuthor(line, isOwn);
+        (line.AuthorJob, line.AuthorStatus) = JobOfAuthor(line, isOwn);
 
         // Un message masqué reste en mémoire (retirer la règle le fait réapparaître), mais il n'alerte jamais.
         if (spam.Matches(line))
@@ -266,32 +274,35 @@ public sealed class Plugin : IDalamudPlugin
             History.Enqueue(line);
     }
 
-    /// <summary>Le job de l'auteur, s'il est dans le groupe ou assez près pour que le jeu le connaisse.</summary>
-    private static uint JobOfAuthor(ChatLine line, bool isOwn)
+    /// <summary>
+    /// Le job et le statut en ligne de l'auteur, s'il est dans le groupe ou assez près pour que le jeu le connaisse.
+    /// Le statut n'est connu que de toi et des joueurs à proximité. 0 : inconnu.
+    /// </summary>
+    private static (uint Job, uint Status) JobOfAuthor(ChatLine line, bool isOwn)
     {
         if (!ChatKinds.Info(line.Kind).HasAuthor)
-            return 0;
+            return (0, 0);
 
         if (isOwn && line.Kind != ChatKind.TellOutgoing)
-            return PlayerState.ClassJob.RowId;
+            return (PlayerState.ClassJob.RowId, ObjectTable.LocalPlayer?.OnlineStatus.RowId ?? 0);
 
         var name = line.Author?.Text;
         if (string.IsNullOrEmpty(name))
-            return 0;
-
-        foreach (var member in PartyList)
-        {
-            if (member.Name.TextValue == name)
-                return member.ClassJob.RowId;
-        }
+            return (0, 0);
 
         foreach (var player in ObjectTable.PlayerObjects)
         {
             if (player.Name.TextValue == name)
-                return player.ClassJob.RowId;
+                return (player.ClassJob.RowId, player.OnlineStatus.RowId);
         }
 
-        return 0;
+        foreach (var member in PartyList)
+        {
+            if (member.Name.TextValue == name)
+                return (member.ClassJob.RowId, 0);
+        }
+
+        return (0, 0);
     }
 
     /// <summary>L'historique est lu : il passe avant les messages arrivés entre-temps, qui sont alors écrits à leur tour.</summary>

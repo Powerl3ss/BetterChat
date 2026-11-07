@@ -56,10 +56,10 @@ public sealed partial class ConfigWindow
         var yesterday = DateTime.Today.AddDays(-1).AddHours(21).AddMinutes(14).ToUniversalTime();
 
         var log = new ChatLog();
-        log.Add(PreviewLine(yesterday, ChatKind.FreeCompany, "Lyra Sunfall", 24, "Bonne soirée à tous, à demain !"));
-        log.Add(PreviewLine(now.AddMinutes(-12), ChatKind.Party, "Kaël Ardent", 21, "Je pull dans 5 secondes."));
-        log.Add(PreviewLine(now.AddMinutes(-12), ChatKind.Party, "Kaël Ardent", 21, "Pensez aux réductions de dégâts."));
-        log.Add(PreviewLine(now.AddMinutes(-3), ChatKind.TellIncoming, "Mira Ombrelune", 38, "Tu viens au raid ce soir ?"));
+        log.Add(PreviewLine(yesterday, ChatKind.FreeCompany, "Lyra Sunfall", 24, 27, "Bonne soirée à tous, à demain !"));
+        log.Add(PreviewLine(now.AddMinutes(-12), ChatKind.Party, "Kaël Ardent", 21, 0, "Je pull dans 5 secondes."));
+        log.Add(PreviewLine(now.AddMinutes(-12), ChatKind.Party, "Kaël Ardent", 21, 0, "Pensez aux réductions de dégâts."));
+        log.Add(PreviewLine(now.AddMinutes(-3), ChatKind.TellIncoming, "Mira Ombrelune", 38, 32, "Tu viens au raid ce soir ?"));
 
         var feed = new ChatFeed(new ChatTabSettings
         {
@@ -70,7 +70,7 @@ public sealed partial class ConfigWindow
         return feed;
     }
 
-    private static ChatLine PreviewLine(DateTime timeUtc, ChatKind kind, string author, uint job, string text)
+    private static ChatLine PreviewLine(DateTime timeUtc, ChatKind kind, string author, uint job, uint status, string text)
     {
         var link = ChatLink.Player(author, string.Empty);
         return new ChatLine
@@ -79,6 +79,7 @@ public sealed partial class ConfigWindow
             Kind = kind,
             Author = link,
             AuthorJob = job,
+            AuthorStatus = status,
             Sender = { new ChatSpan(author, link: link) },
             Body = { new ChatSpan(text) },
             FromHistory = true,

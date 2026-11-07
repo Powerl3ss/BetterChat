@@ -880,9 +880,24 @@ public sealed partial class ConfigWindow : Window, IDisposable
                         changed |= SliderRow("Intensité du contour", null, Cfg.OutlineStrength, 0.1f, 1f, "%.2f", v => Cfg.OutlineStrength = v);
                     changed |= SliderRow("Taille du texte", null, Cfg.FontSize, 10f, 36f, "%.0f", v => Cfg.FontSize = MathF.Round(v));
                     changed |= SliderIntRow("Écart entre les messages", "En pixels. Les messages d'un même joueur, à la suite, restent collés.", Cfg.MessageSpacing, 0, 20, v => Cfg.MessageSpacing = v);
-                    changed |= ToggleRow("Icônes de job", "À côté du nom des membres du groupe et des joueurs à proximité.", Cfg.ShowJobIcons, v => Cfg.ShowJobIcons = v);
-                    using (ImRaii.Disabled(!Cfg.ShowJobIcons))
-                        changed |= SliderRow("Taille des icônes de job", "Par rapport à la hauteur du texte.", Cfg.JobIconHeight, 60f, 150f, "%.0f %%", v => Cfg.JobIconHeight = MathF.Round(v));
+                    var nameIcon = (int)Cfg.NameIcon;
+                    SettingRow("Icône à côté du nom", NameIconDescription(Cfg.NameIcon), 400f * S, () =>
+                    {
+                        var chosen = Segmented("##nameIcon", new[]
+                        {
+                            ("Aucune", FontAwesomeIcon.Ban),
+                            ("Job", FontAwesomeIcon.IdBadge),
+                            ("Rôle", FontAwesomeIcon.ShieldAlt),
+                            ("Statut", FontAwesomeIcon.Circle),
+                        }, nameIcon, 400f * S);
+                        if (chosen != nameIcon)
+                        {
+                            Cfg.NameIcon = (NameIconKind)chosen;
+                            changed = true;
+                        }
+                    }, FrameH + 20f * S);
+                    using (ImRaii.Disabled(Cfg.NameIcon == NameIconKind.None))
+                        changed |= SliderRow("Taille de l'icône", "Par rapport à la hauteur du texte.", Cfg.JobIconHeight, 60f, 150f, "%.0f %%", v => Cfg.JobIconHeight = MathF.Round(v));
                     changed |= ToggleRow("Séparateurs", "Une ligne quand la date change.", Cfg.ShowSeparators, v => Cfg.ShowSeparators = v);
                 });
 
@@ -936,7 +951,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             Cfg.OutlineStrength = d.OutlineStrength;
             Cfg.FontSize = d.FontSize;
             Cfg.MessageSpacing = d.MessageSpacing;
-            Cfg.ShowJobIcons = d.ShowJobIcons;
+            Cfg.NameIcon = d.NameIcon;
             Cfg.JobIconHeight = d.JobIconHeight;
             Cfg.ShowSeparators = d.ShowSeparators;
             Cfg.KeepFocusAfterSend = d.KeepFocusAfterSend;
@@ -955,6 +970,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
             SaveSoon();
         }
     }
+
+    private static string NameIconDescription(NameIconKind kind) => kind switch
+    {
+        NameIconKind.Job => "Le job des membres du groupe et des joueurs à proximité, comme sur leur plaque.",
+        NameIconKind.Role => "Tank, soigneur ou DPS (mêlée, distance, magie), pour le groupe et les joueurs à proximité.",
+        NameIconKind.Status => "Mentor, nouvel aventurier, absent... Seulement pour toi et les joueurs à proximité.",
+        _ => "Rien à côté des noms.",
+    };
 
     // =================================================================== Alertes
 

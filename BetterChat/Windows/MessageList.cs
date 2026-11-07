@@ -31,9 +31,10 @@ public sealed class MessageList
     private const int WidthCacheLimit = 20000;
     private const float SelectionScrollSpeed = 320f;
 
-    // Les icônes de job du jeu se suivent à partir de ce numéro, dans l'ordre de la feuille ClassJob.
-    private const uint JobIconBase = 62000;
-    private static readonly Dictionary<uint, IconInk> JobIconInks = new();
+    // Le dessin réel de chaque icône (sans ses marges), par numéro d'icône.
+    private static readonly Dictionary<uint, IconInk> NameIconInks = new();
+    // L'icône de chaque statut en ligne, lue une fois dans la feuille du jeu.
+    private static readonly Dictionary<uint, uint> StatusIcons = new();
 
     /// <summary>Mise en page d'un message pour une largeur et une police données.</summary>
     private sealed class LineLayout
@@ -192,7 +193,7 @@ public sealed class MessageList
         timeColumn = Cfg.Style == ChatStyle.Modern && Cfg.ShowTimestamps ? MathF.Ceiling(Measure("00:00") + 6f * S) : 0f;
 
         var key = HashCode.Combine(MathF.Round(textWidth), lineHeight, Cfg.Style, Cfg.ShowTimestamps, Cfg.ShowChannelTags, Cfg.SecondaryColor,
-                                   HashCode.Combine(Cfg.ShowJobIcons, Cfg.JobIconHeight, Cfg.MessageSpacing), Cfg.ShowSeparators);
+                                   HashCode.Combine(Cfg.NameIcon, Cfg.JobIconHeight, Cfg.MessageSpacing), Cfg.ShowSeparators);
         var rebuild = !ReferenceEquals(stackFeed, feed) || stackRebuild != feed.RebuildCount || layoutKey != key;
 
         if (rebuild)
@@ -271,7 +272,7 @@ public sealed class MessageList
         if (line.ShowsSender)
         {
             // L'icône de job n'est pas du texte : des espaces lui réservent sa place juste avant le nom.
-            if (HasJobIcon(line))
+            if (NameIconOf(line) != 0)
             {
                 layout.IconSpan = spans.Count;
                 var spaces = (int)MathF.Ceiling(JobIconAdvance / MathF.Max(Measure(" "), 1f));
@@ -434,7 +435,28 @@ public sealed class MessageList
         DrawOutlinedText(drawList, pos + new Vector2(x, last.Line * lineHeight), Cfg.SecondaryColor, text);
     }
 
-    private bool HasJobIcon(ChatLine line) => Cfg.ShowJobIcons && line.AuthorJob != 0;
+    /// <summary>L'icône à côté du nom, selon le réglage : job, rôle ou statut. 0 : aucune.</summary>
+    private uint NameIconOf(ChatLine line) => Cfg.NameIcon switch
+    {
+        NameIconKind.Job => NameIcons.JobIcon(line.AuthorJob),
+        NameIconKind.Role => line.AuthorJob != 0 ? NameIcons.RoleIcon(line.AuthorJob) : 0,
+        NameIconKind.Status => StatusIcon(line.AuthorStatus),
+        _ => 0,
+    };
+
+    private static uint StatusIcon(uint status)
+    {
+        if (status is 0 or NameIcons.PlainOnlineStatus)
+            return 0;
+
+        if (!StatusIcons.TryGetValue(status, out var icon))
+        {
+            icon = Plugin.DataManager.GetExcelSheet<OnlineStatus>().GetRowOrDefault(status)?.Icon ?? 0;
+            StatusIcons[status] = icon;
+        }
+
+        return icon;
+    }
 
     // La case réservée à l'icône : les noms commencent au même endroit, quelle que soit la forme du dessin.
     private float JobIconSize => MathF.Max(MathF.Round(lineHeight * Cfg.JobIconHeight / 100f), 1f);
@@ -445,14 +467,14 @@ public sealed class MessageList
     /// L'icône de job, à la hauteur du texte écrit en <paramref name="textPos"/>. C'est son dessin qui est placé, sans
     /// les marges de son image : il se centre sur le texte et remplit sa case quel que soit le job.
     /// </summary>
-    private void DrawJobIcon(ImDrawListPtr drawList, uint job, Vector2 textPos)
+    private void DrawNameIcon(ImDrawListPtr drawList, uint iconId, Vector2 textPos)
     {
-        var lookup = new GameIconLookup(JobIconBase + job);
+        var lookup = new GameIconLookup(iconId);
         var icon = Plugin.TextureProvider.GetFromGameIcon(lookup);
         if (!icon.TryGetWrap(out var wrap, out _) || wrap == null)
             return;
 
-        var ink = JobIconInk(job, lookup);
+        var ink = NameIconInk(iconId, lookup);
         var inkW = ink.Right - ink.Left;
         var inkH = ink.Bottom - ink.Top;
         var slot = JobIconSize;
@@ -472,9 +494,9 @@ public sealed class MessageList
         drawList.AddImage(wrap.Handle, min, min + size, new Vector2(ink.Left, ink.Top), new Vector2(ink.Right, ink.Bottom));
     }
 
-    private static IconInk JobIconInk(uint job, GameIconLookup lookup)
+    private static IconInk NameIconInk(uint iconId, GameIconLookup lookup)
     {
-        if (JobIconInks.TryGetValue(job, out var known))
+        if (NameIconInks.TryGetValue(iconId, out var known))
             return known;
 
         var ink = IconInk.Full;
@@ -487,10 +509,10 @@ public sealed class MessageList
         catch (Exception ex)
         {
             // Sans cette mesure, l'icône s'affiche simplement avec ses marges.
-            Plugin.Log.Debug(ex, "Lecture de l'icône du job {Job} impossible", job);
+            Plugin.Log.Debug(ex, "Lecture de l'icône {Icon} impossible", iconId);
         }
 
-        JobIconInks[job] = ink;
+        NameIconInks[iconId] = ink;
         return ink;
     }
 
@@ -506,9 +528,9 @@ public sealed class MessageList
             x += Measure("À ");
         }
 
-        if (HasJobIcon(line))
+        if (NameIconOf(line) is not 0 and var nameIcon)
         {
-            DrawJobIcon(drawList, line.AuthorJob, new Vector2(x, pos.Y));
+            DrawNameIcon(drawList, nameIcon, new Vector2(x, pos.Y));
             x += JobIconAdvance;
         }
 
@@ -556,7 +578,7 @@ public sealed class MessageList
 
             if (run.SpanIndex == layout.IconSpan)
             {
-                DrawJobIcon(drawList, line.AuthorJob, pos + new Vector2(run.X, run.Line * lineHeight));
+                DrawNameIcon(drawList, NameIconOf(line), pos + new Vector2(run.X, run.Line * lineHeight));
                 continue;
             }
 

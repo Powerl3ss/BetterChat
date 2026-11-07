@@ -27,7 +27,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Messages épinglés : garde un message important en haut d'un onglet (clic droit sur le message).
 - Messages privés par personne : une pastille par joueur au-dessus de l'onglet, pour suivre chaque conversation à part.
 - Selon le contexte : en donjon, en raid ou en ville, le chat peut changer d'onglet et masquer des canaux.
-- L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
+- À côté du nom, au choix comme sur les plaques du jeu : l'icône de job, le rôle (tank, soigneur, DPS) ou le statut (mentor, nouvel aventurier, absent...). Et une couleur au choix pour repérer tes amis.
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
 - Export d'une conversation dans un fichier texte (clic droit sur l'onglet).
 - Les icônes du jeu dans les messages, et la sélection de texte à la souris (clic droit pour copier).

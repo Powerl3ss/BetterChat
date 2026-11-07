@@ -103,6 +103,9 @@ public sealed class ChatLine
     /// <summary>Job de l'auteur quand il a écrit, s'il était dans le groupe ou à proximité. 0 : inconnu.</summary>
     public uint AuthorJob { get; set; }
 
+    /// <summary>Statut en ligne de l'auteur quand il a écrit (feuille OnlineStatus), s'il était à proximité. 0 : inconnu.</summary>
+    public uint AuthorStatus { get; set; }
+
     /// <summary>Le message cite ton nom ou un mot surveillé.</summary>
     public bool Mentioned { get; set; }
 

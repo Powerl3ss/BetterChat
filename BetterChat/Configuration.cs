@@ -19,7 +19,7 @@ public enum ChatStyle
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     // --- Fenêtre ---
     public bool ChatVisible { get; set; } = true;
@@ -38,7 +38,8 @@ public class Configuration : IPluginConfiguration
     public Dictionary<ChatKind, Vector4> ChannelColors { get; set; } = new();
     public bool ShowSeparators { get; set; } = true;
     public int MessageSpacing { get; set; } = 0; // pixels entre deux messages
-    public bool ShowJobIcons { get; set; } = true;
+    public bool ShowJobIcons { get; set; } = true; // ancien réglage, remplacé par NameIcon (version 2)
+    public NameIconKind NameIcon { get; set; } = NameIconKind.Job;
     public float JobIconHeight { get; set; } = 100f; // hauteur du dessin de l'icône, en % de la ligne de texte
     public Dictionary<string, Vector4> PlayerColors { get; set; } = new();
 
