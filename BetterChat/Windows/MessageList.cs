@@ -918,15 +918,16 @@ public sealed class MessageList
         if (icon.TryGetWrap(out var wrap, out _) && wrap != null)
         {
             var iconSize = 40f * S;
+            var start = ImGui.GetCursorPos();
             ImGui.Image(wrap.Handle, new Vector2(iconSize, iconSize));
-            ImGui.SameLine();
 
             // Le dessin des lettres se centre sur l'image, pas la ligne entière : une ligne garde de la place
-            // sous les lettres (pour p, q, g...), et un nom seul paraissait sinon trop haut.
+            // sous les lettres (pour p, q, g...). Le texte est placé sans « même ligne » : sinon ImGui compte la
+            // hauteur de l'image à partir du texte décalé, et l'infobulle gardait un vide en bas.
             var (inkTop, inkBottom) = DigitInk();
             var extraLines = hasLevel ? ImGui.GetTextLineHeight() + Tip.Spacing.Y : 0f;
             var inkCenter = (inkTop + inkBottom + extraLines) / 2f;
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + MathF.Round(iconSize / 2f - inkCenter));
+            ImGui.SetCursorPos(new Vector2(start.X + iconSize + Tip.Spacing.X, start.Y + MathF.Round(iconSize / 2f - inkCenter)));
         }
 
         ImGui.BeginGroup();
