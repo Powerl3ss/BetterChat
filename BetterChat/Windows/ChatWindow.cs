@@ -168,8 +168,10 @@ public sealed partial class ChatWindow : Window, IDisposable
                 DrawConversationBar(size, tabH + searchH, tellsH);
 
             var top = tabH + searchH + tellsH;
+            var translateH = input.AutoTranslateHeight(inputH);
             ImGui.SetCursorPos(new Vector2(0, top));
-            messages.Draw(plugin.ActiveFeed, new Vector2(size.X, MathF.Max(size.Y - top - inputH, 10f)));
+            messages.Draw(plugin.ActiveFeed, new Vector2(size.X, MathF.Max(size.Y - top - translateH - inputH, 10f)));
+            input.DrawAutoTranslateBar(size, size.Y - inputH, translateH, inputH);
 
             ImGui.SetCursorPos(new Vector2(0, size.Y - inputH));
             input.Draw(size, inputH);

@@ -41,9 +41,11 @@ public sealed class ChatInputBar
     private bool cycleChannelRequested;
 
     // Autotraduction : la fenêtre de recherche, le mot qu'elle remplacera, les résultats.
-    private const string AutoTranslatePopup = "##autoTranslate";
     private const int AutoTranslateResultLimit = 50;
-    private bool autoTranslateRequested;
+    private const int AutoTranslateRows = 5;
+    private const float AutoTranslateRevealSpeed = 14f; // comme la barre de recherche
+    private float autoTranslateShown;
+    private bool autoTranslateScroll;
     private bool autoTranslateTabRequested;
     private bool autoTranslateFocus;
     private bool autoTranslateOpen;
@@ -52,7 +54,6 @@ public sealed class ChatInputBar
     private int autoTranslateStart;
     private int autoTranslateSelected;
     private List<AutoTranslateEntry> autoTranslateResults = new();
-    private Vector2 inputMin;
 
     private List<CommandSuggestion> suggestions = new();
     private int selectedSuggestion = -1;
@@ -161,7 +162,6 @@ public sealed class ChatInputBar
         ImGui.SameLine(0, 6f * S);
         ImGui.SetCursorPosY(rowY);
         DrawTextInput(size.X - pad * 2f - pillW - 6f * S - rowH - 4f * S, channel);
-        inputMin = ImGui.GetItemRectMin();
 
         DrawInputFeedback();
         DrawSuggestions();
@@ -170,133 +170,193 @@ public sealed class ChatInputBar
         ImGui.SameLine(0, 4f * S);
         ImGui.SetCursorPosY(rowY);
         if (chat.IconButton("##autoTranslateButton", FontAwesomeIcon.Language, rowH, null, autoTranslateOpen))
-            OpenAutoTranslate();
-
-        DrawAutoTranslate();
+            OpenAutoTranslate(toggle: true);
     }
 
     // ------------------------------------------------------------ Autotraduction
 
-    /// <summary>Ouvre la recherche sur le dernier mot tapé : le mot choisi le remplacera.</summary>
-    private void OpenAutoTranslate()
+    /// <summary>Ouvre la barre sur le dernier mot tapé : le mot choisi le remplacera. Un second clic la ferme.</summary>
+    private void OpenAutoTranslate(bool toggle = false)
     {
+        if (toggle && autoTranslateOpen)
+        {
+            CloseAutoTranslate();
+            return;
+        }
+
         var (start, word) = AutoTranslateText.LastWord(inputText);
         autoTranslateStart = start;
         autoTranslateQuery = word;
         autoTranslateSelected = 0;
-        autoTranslateRequested = true;
+        autoTranslateOpen = true;
+        autoTranslateFocus = true;
     }
 
-    private void DrawAutoTranslate()
+    private void CloseAutoTranslate()
     {
-        if (autoTranslateRequested)
-        {
-            autoTranslateRequested = false;
-            autoTranslateFocus = true;
-            ImGui.OpenPopup(AutoTranslatePopup);
-        }
+        autoTranslateOpen = false;
+        focusRequested = true;
+    }
 
-        ImGui.SetNextWindowPos(inputMin - new Vector2(0f, 6f * S), ImGuiCond.Always, new Vector2(0f, 1f));
-        using var style = Tip.PushPopupStyle();
-        autoTranslateOpen = ImGui.BeginPopup(AutoTranslatePopup);
-        if (!autoTranslateOpen)
+    private float AutoTranslateRowHeight => MathF.Round(ImGui.GetTextLineHeight() + 6f * S);
+
+    private int AutoTranslateVisibleRows =>
+        autoTranslateQuery.Trim().Length == 0 || plugin.Game.AutoTranslate.Entries == null
+            ? 0
+            : Math.Clamp(autoTranslateResults.Count, 1, AutoTranslateRows); // une ligne pour « Aucun mot trouvé »
+
+    /// <summary>
+    /// Fait avancer l'animation et renvoie la hauteur occupée au-dessus de la saisie, comme la barre de recherche
+    /// sous les onglets. Elle grandit avec les résultats.
+    /// </summary>
+    public float AutoTranslateHeight(float barHeight)
+    {
+        UpdateAutoTranslateResults();
+        var target = autoTranslateOpen ? barHeight + AutoTranslateVisibleRows * AutoTranslateRowHeight : 0f;
+        var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
+        autoTranslateShown += (target - autoTranslateShown) * (1f - MathF.Exp(-AutoTranslateRevealSpeed * dt));
+        if (MathF.Abs(target - autoTranslateShown) < 0.5f)
+            autoTranslateShown = target;
+
+        return MathF.Round(autoTranslateShown);
+    }
+
+    /// <summary>La barre sort de derrière la saisie en glissant vers le haut, et les messages remontent pour lui faire place.</summary>
+    public void DrawAutoTranslateBar(Vector2 size, float bottom, float shown, float barHeight)
+    {
+        if (shown <= 0f)
             return;
 
-        var width = 340f * S;
-        if (autoTranslateFocus)
+        var origin = ImGui.GetWindowPos();
+        var top = bottom - shown;
+        var reveal = Math.Clamp(shown / barHeight, 0f, 1f);
+
+        ImGui.PushClipRect(origin + new Vector2(0f, top), origin + new Vector2(size.X, bottom), true);
+        using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(reveal, 0.001f) * ImGui.GetStyle().Alpha))
+        {
+            DrawAutoTranslateField(size, top, barHeight, reveal);
+            DrawAutoTranslateResults(size, top + barHeight, bottom - top - barHeight);
+        }
+        ImGui.PopClipRect();
+    }
+
+    private void DrawAutoTranslateField(Vector2 size, float top, float height, float reveal)
+    {
+        var margin = EdgeMargin * S;
+        var gap = 6f * S;
+        var close = ImGui.GetFrameHeight();
+        var closeX = size.X - margin - close; // dans la même colonne que le bouton d'autotraduction
+
+        ImGui.SetCursorPos(new Vector2(margin, MathF.Round(top + (height - ImGui.GetFrameHeight()) / 2f)));
+        ImGui.SetNextItemWidth(closeX - gap - margin);
+
+        // Attend que la barre soit assez sortie : une zone encore hors du cadre ne peut pas prendre le focus.
+        if (autoTranslateFocus && reveal >= 0.5f)
         {
             ImGui.SetKeyboardFocusHere();
             autoTranslateFocus = false;
         }
 
-        ImGui.SetNextItemWidth(width);
         using (ImRaii.PushColor(ImGuiCol.FrameBg, InputBg))
             ImGui.InputTextWithHint("##autoTranslateQuery", "Chercher un mot de l'autotraduction...", ref autoTranslateQuery, 64);
 
-        var entries = plugin.Game.AutoTranslate.Entries;
-        if (entries == null)
-            ImGui.TextColored(TextDim, "Lecture de la liste du jeu...");
-        else
-            DrawAutoTranslateResults(entries, width);
+        var active = ImGui.IsItemActive();
+        var deactivated = ImGui.IsItemDeactivated();
 
-        if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+        // Les flèches choisissent, Entrée valide, Échap ferme : le clavier suffit.
+        if (active && autoTranslateResults.Count > 0)
         {
-            ImGui.CloseCurrentPopup();
-            focusRequested = true;
+            if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
+            {
+                autoTranslateSelected = Math.Min(autoTranslateSelected + 1, autoTranslateResults.Count - 1);
+                autoTranslateScroll = true;
+            }
+
+            if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
+            {
+                autoTranslateSelected = Math.Max(autoTranslateSelected - 1, 0);
+                autoTranslateScroll = true;
+            }
         }
 
-        ImGui.EndPopup();
+        var enter = deactivated && (ImGui.IsKeyPressed(ImGuiKey.Enter, false) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter, false));
+        var escape = deactivated && ImGui.IsKeyPressed(ImGuiKey.Escape, false);
+
+        ImGui.SetCursorPos(new Vector2(closeX, MathF.Round(top + (height - close) / 2f)));
+        if (chat.IconButton("##closeAutoTranslate", FontAwesomeIcon.Times, close, null) || escape)
+            CloseAutoTranslate();
+        else if (enter && autoTranslateResults.Count > 0)
+            PickAutoTranslate(autoTranslateResults[autoTranslateSelected]);
     }
 
-    private void DrawAutoTranslateResults(IReadOnlyList<AutoTranslateEntry> entries, float width)
+    private void UpdateAutoTranslateResults()
     {
-        if (autoTranslateResultsFor != autoTranslateQuery)
-        {
-            autoTranslateResultsFor = autoTranslateQuery;
-            autoTranslateResults = AutoTranslateSearch.Find(entries, autoTranslateQuery, AutoTranslateResultLimit);
-            autoTranslateSelected = 0;
-        }
-
-        if (autoTranslateQuery.Trim().Length == 0)
-        {
-            ImGui.TextColored(TextDim, "Tape un mot pour le chercher.");
+        if (autoTranslateResultsFor == autoTranslateQuery || plugin.Game.AutoTranslate.Entries is not { } entries)
             return;
-        }
+
+        autoTranslateResultsFor = autoTranslateQuery;
+        autoTranslateResults = AutoTranslateSearch.Find(entries, autoTranslateQuery, AutoTranslateResultLimit);
+        autoTranslateSelected = 0;
+    }
+
+    /// <param name="room">Hauteur déjà sortie sous la barre : la liste ne déborde pas sur la saisie pendant l'animation.</param>
+    private void DrawAutoTranslateResults(Vector2 size, float top, float room)
+    {
+        var rows = AutoTranslateVisibleRows;
+        if (rows == 0)
+            return;
+
+        var margin = EdgeMargin * S;
+        var width = size.X - margin * 2f;
+        var rowH = AutoTranslateRowHeight;
+        var lineH = ImGui.GetTextLineHeight();
 
         if (autoTranslateResults.Count == 0)
         {
+            ImGui.SetCursorPos(new Vector2(margin + 6f * S, MathF.Round(top + (rowH - lineH) / 2f)));
             ImGui.TextColored(TextDim, "Aucun mot trouvé.");
             return;
         }
 
-        // Les flèches choisissent, Entrée valide : le clavier suffit.
-        var moved = false;
-        if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
-        {
-            autoTranslateSelected = Math.Min(autoTranslateSelected + 1, autoTranslateResults.Count - 1);
-            moved = true;
-        }
-        if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
-        {
-            autoTranslateSelected = Math.Max(autoTranslateSelected - 1, 0);
-            moved = true;
-        }
+        ImGui.SetCursorPos(new Vector2(margin, top));
+        var listH = MathF.Min(rows * rowH, MathF.Floor(room));
+        if (listH < 1f)
+            return;
 
+        using var list = ImRaii.Child("##autoTranslateList", new Vector2(width, listH), false);
+        if (!list.Success)
+            return;
+
+        var drawList = ImGui.GetWindowDrawList();
         AutoTranslateEntry? picked = null;
-        if (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
-            picked = autoTranslateResults[autoTranslateSelected];
-
-        var lineH = ImGui.GetTextLineHeight();
-        var rowH = MathF.Round(lineH + 6f * S);
-        using (ImRaii.Child("##autoTranslateList", new Vector2(width, MathF.Min(autoTranslateResults.Count, 8) * rowH), false))
+        for (var i = 0; i < autoTranslateResults.Count; i++)
         {
-            var drawList = ImGui.GetWindowDrawList();
-            for (var i = 0; i < autoTranslateResults.Count; i++)
+            var entry = autoTranslateResults[i];
+            var min = ImGui.GetCursorScreenPos();
+            if (ImGui.InvisibleButton($"##autoTranslate{i}", new Vector2(width, rowH)))
+                picked = entry;
+
+            if (ImGui.IsItemHovered() && ImGui.GetIO().MouseDelta != Vector2.Zero)
+                autoTranslateSelected = i;
+
+            var selected = i == autoTranslateSelected;
+            if (selected && autoTranslateScroll)
             {
-                var entry = autoTranslateResults[i];
-                var min = ImGui.GetCursorScreenPos();
-                if (ImGui.InvisibleButton($"##autoTranslate{i}", new Vector2(width, rowH)))
-                    picked = entry;
-
-                var hovered = ImGui.IsItemHovered();
-                if (hovered && ImGui.GetIO().MouseDelta != Vector2.Zero)
-                    autoTranslateSelected = i;
-
-                var selected = i == autoTranslateSelected;
-                if (selected && moved)
-                    ImGui.SetScrollHereY();
-                if (selected)
-                    drawList.AddRectFilled(min, min + new Vector2(width, rowH), Col(Accent with { W = 0.18f }), 6f * S);
-
-                var textY = min.Y + MathF.Round((rowH - lineH) / 2f);
-                var textW = ImGui.CalcTextSize(entry.Text).X;
-                drawList.AddText(new Vector2(min.X + 6f * S, textY), Col(selected ? Accent : TextMain), entry.Text);
-
-                // La catégorie, à droite, si elle tient.
-                var titleW = ImGui.CalcTextSize(entry.Title).X;
-                if (entry.Title.Length > 0 && 6f * S + textW + 16f * S + titleW < width - 6f * S)
-                    drawList.AddText(new Vector2(min.X + width - 6f * S - titleW, textY), Col(TextDim), entry.Title);
+                ImGui.SetScrollHereY();
+                autoTranslateScroll = false;
             }
+
+            if (selected)
+                drawList.AddRectFilled(min, min + new Vector2(width, rowH), Col(Accent with { W = 0.18f }), 6f * S);
+
+            var textY = min.Y + MathF.Round((rowH - lineH) / 2f);
+            var textW = Measure(entry.Text);
+            DrawOutlinedText(drawList, new Vector2(min.X + 6f * S, textY), selected ? Accent : TextMain, entry.Text);
+
+            // La catégorie, à droite, si elle tient.
+            var titleW = Measure(entry.Title);
+            if (entry.Title.Length > 0 && 6f * S + textW + 16f * S + titleW < width - 6f * S)
+                DrawOutlinedText(drawList, new Vector2(min.X + width - 6f * S - titleW, textY), Cfg.SecondaryColor, entry.Title);
         }
 
         if (picked != null)
@@ -308,7 +368,7 @@ public sealed class ChatInputBar
         plugin.Game.AutoTranslate.Remember(entry);
         var start = Math.Min(autoTranslateStart, inputText.Length);
         inputText = inputText[..start] + AutoTranslateText.Wrap(entry.Text) + " ";
-        ImGui.CloseCurrentPopup();
+        autoTranslateOpen = false;
         focusRequested = true;
         cursorToEnd = true;
     }

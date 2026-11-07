@@ -104,7 +104,9 @@ public sealed class DetachedTabWindow : Window
             DrawHeader(feed, size, headerH);
 
             ImGui.SetCursorPos(new Vector2(0f, headerH));
-            messages.Draw(feed, new Vector2(size.X, MathF.Max(size.Y - headerH - inputH, 10f)));
+            var translateH = input.AutoTranslateHeight(inputH);
+            messages.Draw(feed, new Vector2(size.X, MathF.Max(size.Y - headerH - translateH - inputH, 10f)));
+            input.DrawAutoTranslateBar(size, size.Y - inputH, translateH, inputH);
 
             ImGui.SetCursorPos(new Vector2(0f, size.Y - inputH));
             input.Draw(size, inputH);
