@@ -39,6 +39,17 @@ var tests = new (string Name, Action Run)[]
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
     ("Joueur : le monde « Dev » du jeu n'est pas un vrai monde", Tests.PlaceholderWorldIgnored),
+    ("Autotraduction : texte coupé autour des mots choisis", Tests.AutoTranslateSplit),
+    ("Autotraduction : dernier mot tapé", Tests.AutoTranslateLastWord),
+    ("Autotraduction : lecture des tables du jeu", Tests.CompletionLookupParsed),
+    ("Autotraduction : ordre des résultats", Tests.AutoTranslateSearchOrder),
+    ("Messages privés : une conversation par personne", Tests.ConversationsByPerson),
+    ("Messages privés : non-lus et limite", Tests.ConversationsUnread),
+    ("Messages privés : l'onglet ne montre qu'une personne", Tests.FeedShowsOnePartner),
+    ("Épinglés : épingler, retrouver, retirer", Tests.PinToggle),
+    ("Épinglés : limite par onglet", Tests.PinLimit),
+    ("Contexte : donjon, raid, ville", Tests.ContextClassified),
+    ("Contexte : canaux masqués d'une section", Tests.ContextHiddenKinds),
     ("Emote : le nom n'est pas répété", Tests.EmoteDoesNotRepeatName),
     ("Icônes du jeu : aller-retour dans le texte", Tests.GameIconsInText),
     ("Icônes du jeu : retirées du texte copié et de la recherche", Tests.GameIconsNotCopied),
@@ -567,6 +578,174 @@ internal static class Tests
         Same(null, LineSeparators.Between(second, third, Today).Day, "même jour");
         Same(Today.AddDays(-1), LineSeparators.Between(null, first, Today).Day, "premier message d'un autre jour");
         Same(null, LineSeparators.Between(null, second, Today).Day, "premier message du jour");
+    }
+
+    public static void AutoTranslateSplit()
+    {
+        var text = $"salut {AutoTranslateText.Wrap("Bonjour")} et {AutoTranslateText.Open}seul";
+        var parts = AutoTranslateText.Split(text);
+        Same(3, parts.Count, "trois morceaux");
+        Same(new AutoTranslateText.Part("salut ", false), parts[0], "texte");
+        Same(new AutoTranslateText.Part("Bonjour", true), parts[1], "mot choisi");
+        Same(new AutoTranslateText.Part($" et {AutoTranslateText.Open}seul", false), parts[2], "flèche seule");
+        Same(0, AutoTranslateText.Split("").Count, "vide");
+    }
+
+    public static void AutoTranslateLastWord()
+    {
+        Same((6, "bonj"), AutoTranslateText.LastWord("salut bonj"), "mot");
+        Same((0, "bonj"), AutoTranslateText.LastWord("bonj"), "seul mot");
+        Same((6, ""), AutoTranslateText.LastWord("salut "), "après un espace");
+        Same((3, ""), AutoTranslateText.LastWord("/sh"), "commande");
+        Same((3, "salut"), AutoTranslateText.LastWord("/p salut"), "après une commande");
+        var picked = AutoTranslateText.Wrap("Bonjour");
+        Same((picked.Length, ""), AutoTranslateText.LastWord(picked), "mot déjà choisi");
+    }
+
+    public static void CompletionLookupParsed()
+    {
+        var lookup = CompletionLookup.Parse("Mount[1-3, 7,col-2,noun]")!;
+        Same("Mount", lookup.Sheet, "feuille");
+        Check(lookup.Rows.SequenceEqual(new[] { (1u, 3u), (7u, 7u) }), "lignes");
+        Check(lookup.Columns.SequenceEqual(new[] { 2 }), "colonne");
+
+        var whole = CompletionLookup.Parse("ClassJob")!;
+        Same(0, whole.Rows.Count, "toutes les lignes");
+        Check(whole.Columns.SequenceEqual(new[] { 0 }), "première colonne");
+
+        Same(null, CompletionLookup.Parse(""), "vide");
+        Same(null, CompletionLookup.Parse("@"), "dans la ligne");
+        Same(null, CompletionLookup.Parse("Mount[a]"), "illisible");
+    }
+
+    public static void AutoTranslateSearchOrder()
+    {
+        var entries = new List<AutoTranslateEntry>
+        {
+            new(1, 1, "Bonjour à tous", "Salutations"),
+            new(1, 2, "Bonjour", "Salutations"),
+            new(1, 3, "Dire bonjour", "Salutations"),
+            new(2, 4, "Merci", "Bonjour et merci"),
+            new(2, 5, "Au revoir", "Salutations"),
+        };
+
+        var found = AutoTranslateSearch.Find(entries, " BONJOUR", 10).Select(e => e.Key).ToList();
+        Check(found.SequenceEqual(new uint[] { 2, 1, 3, 4 }), $"ordre : {string.Join(",", found)}");
+        Same(1, AutoTranslateSearch.Find(entries, "bonjour", 1).Count, "limite");
+        Same(0, AutoTranslateSearch.Find(entries, "  ", 10).Count, "rien à chercher");
+        Same(1, AutoTranslateSearch.Find(entries, "a tous", 10).Count, "sans accents");
+    }
+
+    private static ChatLine Tell(ChatKind kind, string person, string world = "", string text = "salut") => new()
+    {
+        TimeUtc = T0,
+        Kind = kind,
+        Body = new List<ChatSpan> { new(text) },
+        Author = ChatLink.Player(person, world),
+    };
+
+    public static void ConversationsByPerson()
+    {
+        var conversations = new TellConversations();
+        conversations.Note(Tell(ChatKind.TellIncoming, "Jean", "Omega"), seen: true);
+        conversations.Note(Tell(ChatKind.TellIncoming, "Marie"), seen: true);
+        conversations.Note(Tell(ChatKind.TellOutgoing, "jean"), seen: true);
+        conversations.Note(Line(ChatKind.Say, "salut", "Paul"), seen: true);
+
+        Same(2, conversations.All.Count, "deux personnes");
+        Same("jean", conversations.All[0].Key, "la plus récente en premier");
+        Same("Jean@Omega", conversations.All[0].Person.TellTarget, "le monde connu est gardé");
+        Same("marie", TellConversations.KeyOf(Tell(ChatKind.TellOutgoing, "Marie")), "destinataire");
+        Same(null, TellConversations.KeyOf(Line(ChatKind.Say, "salut", "Paul")), "pas un message privé");
+    }
+
+    public static void ConversationsUnread()
+    {
+        var conversations = new TellConversations();
+        conversations.Note(Tell(ChatKind.TellIncoming, "Jean"), seen: false);
+        conversations.Note(Tell(ChatKind.TellIncoming, "Jean"), seen: false);
+        conversations.Note(Tell(ChatKind.TellOutgoing, "Jean"), seen: false);
+        conversations.Note(Tell(ChatKind.TellIncoming, "Jean"), seen: true);
+        Same(2, conversations.All[0].Unread, "reçus et pas vus");
+
+        conversations.MarkRead("jean");
+        Same(0, conversations.All[0].Unread, "lus");
+
+        for (var i = 0; i < TellConversations.Limit + 3; i++)
+            conversations.Note(Tell(ChatKind.TellIncoming, $"Joueur {i}"), seen: true);
+        Same(TellConversations.Limit, conversations.All.Count, "limite");
+
+        conversations.Remove("joueur 12");
+        Same(TellConversations.Limit - 1, conversations.All.Count, "fermée");
+    }
+
+    public static void FeedShowsOnePartner()
+    {
+        var log = new ChatLog();
+        log.Add(Tell(ChatKind.TellIncoming, "Jean"));
+        log.Add(Tell(ChatKind.TellIncoming, "Marie"));
+        log.Add(Tell(ChatKind.TellOutgoing, "Jean"));
+        log.Add(Line(ChatKind.Say, "salut", "Paul"));
+
+        var feed = Feed(ChatKind.TellIncoming, ChatKind.TellOutgoing, ChatKind.Say);
+        feed.Update(log, 0, NoMute);
+        Same(4, feed.Visible.Count, "tout l'onglet");
+
+        feed.SetPartner("jean");
+        feed.Update(log, 0, NoMute);
+        Same(2, feed.Visible.Count, "seulement Jean");
+
+        feed.SetPartner(null);
+        feed.Update(log, 0, NoMute);
+        Same(4, feed.Visible.Count, "de nouveau tout");
+    }
+
+    public static void PinToggle()
+    {
+        var tab = new ChatTabSettings();
+        var line = Line(ChatKind.FreeCompany, "Raid à 21h", "Jean");
+
+        tab.TogglePin(line);
+        Same(1, tab.Pinned.Count, "épinglé");
+        Same("Jean: Raid à 21h", tab.Pinned[0].CopyText, "copie");
+
+        // Le même message relu de l'historique est un autre objet, avec un autre numéro.
+        var reread = Line(ChatKind.FreeCompany, "Raid à 21h", "Jean");
+        reread.Id = line.Id + 100;
+        Check(tab.PinOf(reread) != null, "retrouvé");
+
+        tab.TogglePin(reread);
+        Same(0, tab.Pinned.Count, "retiré");
+    }
+
+    public static void PinLimit()
+    {
+        var tab = new ChatTabSettings();
+        for (var i = 0; i < PinnedMessage.LimitPerTab + 2; i++)
+            tab.TogglePin(Line(ChatKind.Say, $"message {i}", "Jean"));
+
+        Same(PinnedMessage.LimitPerTab, tab.Pinned.Count, "limite");
+        Same($"message {PinnedMessage.LimitPerTab + 1}", tab.Pinned[0].Text, "le plus récent en premier");
+    }
+
+    public static void ContextClassified()
+    {
+        Same(ChatContext.Dungeon, ChatContexts.Classify(3, 2), "donjon");
+        Same(ChatContext.Dungeon, ChatContexts.Classify(31, 21), "donjon sans fond");
+        Same(ChatContext.Raid, ChatContexts.Classify(17, 5), "raid");
+        Same(ChatContext.Raid, ChatContexts.Classify(17, 28), "fatal");
+        Same(ChatContext.Town, ChatContexts.Classify(0, 0), "ville");
+        Same(ChatContext.Town, ChatContexts.Classify(2, 0), "auberge");
+        Same(ChatContext.Elsewhere, ChatContexts.Classify(1, 0), "monde ouvert");
+        Same(ChatContext.Elsewhere, ChatContexts.Classify(10, 4), "défi");
+    }
+
+    public static void ContextHiddenKinds()
+    {
+        var hidden = ChatContexts.HiddenKinds(new[] { ChatSection.Linkshells });
+        Check(hidden.Contains(ChatKind.Linkshell1), "linkshell");
+        Check(!hidden.Contains(ChatKind.Say), "pas les autres");
+        Same(0, ChatContexts.HiddenKinds(Array.Empty<ChatSection>()).Count, "rien");
     }
 
     public static void PlaceholderWorldIgnored()

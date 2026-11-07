@@ -525,6 +525,72 @@ public sealed partial class ConfigWindow : Window, IDisposable
         }
 
         DrawTabEditor(Cfg.Tabs[editedTab]);
+        DrawContextRules();
+    }
+
+    /// <summary>Changer d'onglet ou masquer des canaux selon l'endroit : donjon, raid, ville.</summary>
+    private void DrawContextRules()
+    {
+        SectionTitle("Selon le contexte", $"Actuellement : {ChatContexts.Label(plugin.Context).ToLowerInvariant()}");
+        Card(() => TextDimmed("En entrant dans un donjon, un raid ou une ville, le chat peut changer d'onglet et masquer des canaux. En sortant, l'onglet d'avant revient et les canaux réapparaissent."));
+
+        foreach (var context in ChatContexts.Configurable)
+        {
+            var rule = Cfg.RuleFor(context)!;
+            Card(() =>
+            {
+                ImGui.TextColored(Cfg.AccentColor with { W = 1f }, ChatContexts.Label(context));
+
+                SettingRow("Onglet à afficher", null, 220f * S, () =>
+                {
+                    var current = Cfg.Tabs.Find(t => t.Id == rule.TabId && !t.Detached);
+                    ImGui.SetNextItemWidth(220f * S);
+                    using var combo = ImRaii.Combo($"##contextTab{context}", current?.Name ?? "Ne rien changer");
+                    if (!combo.Success)
+                        return;
+
+                    if (ImGui.Selectable("Ne rien changer", current == null))
+                    {
+                        rule.TabId = string.Empty;
+                        SaveSoon();
+                    }
+
+                    foreach (var tab in Cfg.Tabs.Where(t => !t.Detached))
+                    {
+                        if (ImGui.Selectable($"{tab.Name}##{tab.Id}", tab == current))
+                        {
+                            rule.TabId = tab.Id;
+                            SaveSoon();
+                        }
+                    }
+                });
+
+                ImGui.TextUnformatted("Masquer");
+                var column = cardInner / 2f;
+                var start = ImGui.GetCursorPosX();
+                var sections = Enum.GetValues<ChatSection>();
+                for (var i = 0; i < sections.Length; i++)
+                {
+                    if (i % 2 == 1)
+                    {
+                        ImGui.SameLine();
+                        ImGui.SetCursorPosX(start + column);
+                    }
+
+                    var section = sections[i];
+                    var hidden = rule.Hidden.Contains(section);
+                    if (ImGui.Checkbox($"{ChatKinds.SectionLabel(section)}##{context}{section}", ref hidden))
+                    {
+                        if (hidden)
+                            rule.Hidden.Add(section);
+                        else
+                            rule.Hidden.Remove(section);
+                        plugin.ContextRulesChanged();
+                        SaveSoon();
+                    }
+                }
+            });
+        }
     }
 
     private bool DrawTabRow(int index)

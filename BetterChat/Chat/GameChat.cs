@@ -358,12 +358,47 @@ public sealed unsafe class GameChat : IDisposable
         var message = ChatText.Normalize(text);
         if (message.Length == 0)
             return SendResult.Empty;
+        if (AutoTranslateText.Contains(message))
+            return SendWithAutoTranslate(message);
+
         if (ChatText.ByteLength(message) > ChatText.MaxBytes)
             return SendResult.TooLong;
         if (!IsAllowedByGame(message))
             return SendResult.InvalidCharacters;
 
         Run(message);
+        return SendResult.Sent;
+    }
+
+    /// <summary>La liste de l'autotraduction du jeu.</summary>
+    internal AutoTranslateData AutoTranslate { get; } = new();
+
+    /// <summary>
+    /// Les mots entre flèches vertes deviennent de vrais liens d'autotraduction. Un mot qu'on ne retrouve pas dans
+    /// la liste (modifié à la main) part comme du texte normal.
+    /// </summary>
+    private SendResult SendWithAutoTranslate(string message)
+    {
+        var bytes = new List<byte>();
+        var plain = new System.Text.StringBuilder();
+        foreach (var part in AutoTranslateText.Split(message))
+        {
+            if (part.IsEntry && AutoTranslate.Find(part.Text) is { } entry)
+            {
+                bytes.AddRange(AutoTranslateData.Encode(entry.Group, entry.Key));
+                continue;
+            }
+
+            bytes.AddRange(System.Text.Encoding.UTF8.GetBytes(part.Text));
+            plain.Append(part.Text);
+        }
+
+        if (bytes.Count > ChatText.MaxBytes)
+            return SendResult.TooLong;
+        if (!IsAllowedByGame(plain.ToString()))
+            return SendResult.InvalidCharacters;
+
+        RunBytes(bytes.ToArray());
         return SendResult.Sent;
     }
 
@@ -382,7 +417,10 @@ public sealed unsafe class GameChat : IDisposable
     }
 
     /// <summary>Le jeu traite la commande au prochain tour de sa boucle, là où il s'y attend.</summary>
-    private static void Run(string text)
+    internal static void Run(string text) => RunBytes(System.Text.Encoding.UTF8.GetBytes(text));
+
+    /// <summary>Envoie un texte déjà encodé pour le jeu, liens d'autotraduction compris.</summary>
+    private static void RunBytes(byte[] bytes)
     {
         Plugin.Framework.RunOnTick(() =>
         {
@@ -390,7 +428,7 @@ public sealed unsafe class GameChat : IDisposable
             if (module == null)
                 return;
 
-            var entry = Utf8String.FromString(text);
+            var entry = Utf8String.FromSequence(bytes);
             module->ProcessChatBoxEntry(entry);
             entry->Dtor(true);
         });

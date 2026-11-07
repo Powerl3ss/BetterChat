@@ -63,6 +63,19 @@ public class Configuration : IPluginConfiguration
     // --- Joueurs masqués ---
     public List<string> MutedPlayers { get; set; } = new();
 
+    // --- Selon le contexte ---
+    public ContextRule DungeonRule { get; set; } = new();
+    public ContextRule RaidRule { get; set; } = new();
+    public ContextRule TownRule { get; set; } = new();
+
+    public ContextRule? RuleFor(ChatContext context) => context switch
+    {
+        ChatContext.Dungeon => DungeonRule,
+        ChatContext.Raid => RaidRule,
+        ChatContext.Town => TownRule,
+        _ => null,
+    };
+
     // --- Anti-spam ---
     public List<string> SpamWords { get; set; } = new();
     public bool CollapseRepeats { get; set; } = true;

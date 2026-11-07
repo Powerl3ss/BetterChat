@@ -24,6 +24,9 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Recherche dans l'onglet affiché (la loupe), par mot, joueur, canal ou date : `de:Jean canal:CL date:hier`.
 - Noms, objets, cartes, quêtes, effets, annonces de recherche de groupe et adresses web cliquables. Survoler un objet, une quête ou un effet montre ses détails, et le clic droit sur un objet ouvre son craft s'il en a un. Une adresse s'affiche en entier avant de s'ouvrir.
 - Une ligne quand la date change.
+- Messages épinglés : garde un message important en haut d'un onglet (clic droit sur le message).
+- Messages privés par personne : une pastille par joueur au-dessus de l'onglet, pour suivre chaque conversation à part.
+- Selon le contexte : en donjon, en raid ou en ville, le chat peut changer d'onglet et masquer des canaux.
 - L'icône de job à côté des membres du groupe et des joueurs à proximité, et une couleur au choix pour repérer tes amis.
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
 - Export d'une conversation dans un fichier texte (clic droit sur l'onglet).
@@ -32,11 +35,12 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 
 **Écrire**
 - Entrée ouvre la saisie, comme dans le jeu. La pastille de couleur montre où partira le message, et suit ce que tu tapes (`/p bonjour`).
-- Tab passe au canal suivant, parmi ceux que tu peux vraiment utiliser (groupe, compagnie, linkshells...).
+- Dans une saisie vide, Tab passe au canal suivant, parmi ceux que tu peux vraiment utiliser (groupe, compagnie, linkshells...).
+- Autotraduction : Tab après un mot, ou le bouton à droite de la saisie, le cherche dans la liste du jeu.
 - Les flèches rappellent tes derniers messages, sans perdre ce que tu étais en train d'écrire.
 - En tapant `/`, les commandes du jeu et des plugins sont proposées et se complètent avec Tab.
 - Un aperçu montre ce que donneront `<t>`, `<flag>` et les autres raccourcis du jeu avant l'envoi.
-- Un clic sur un nom : message privé, copier, choisir sa couleur, masquer ses messages. Les derniers correspondants restent dans le menu des canaux.
+- Un clic sur un nom : message privé, inviter dans le groupe, examiner, plaque d'aventurier, ajouter en ami, copier, choisir sa couleur, masquer ses messages. Les derniers correspondants restent dans le menu des canaux.
 
 **Être prévenu**
 - Ton nom et les mots que tu choisis surlignent le message, avec un son si tu veux.
@@ -60,7 +64,6 @@ Si Entrée n'ouvre plus la saisie, clique dans la zone de saisie : elle fonction
 
 ## Limites connues
 
-- Pas de liste d'autotraduction.
 - Le texte en italique du jeu est seulement un peu atténué.
 
 ## Structure

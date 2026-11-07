@@ -60,6 +60,14 @@ public sealed class Plugin : IDalamudPlugin
     public ChatHistoryStore History { get; }
     public RecentTells RecentTells { get; } = new();
     public CommandSuggester Commands { get; } = new();
+
+    /// <summary>Les personnes avec qui tu échanges des messages privés.</summary>
+    public TellConversations Conversations { get; } = new();
+
+    internal PlayerActions Players { get; }
+
+    /// <summary>Où tu te trouves : donjon, raid, ville ou ailleurs.</summary>
+    public ChatContext Context { get; private set; } = ChatContext.Elsewhere;
     internal GameIconAtlas Icons { get; } = new();
 
     /// <summary>Les messages déjà envoyés, rappelés avec les flèches depuis n'importe quelle zone de saisie.</summary>
@@ -77,6 +85,12 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ConfigWindow configWindow;
 
     private bool detachedWindowsDirty = true;
+
+    // Disposition selon le contexte : la zone vue en dernier, l'onglet d'avant, les canaux masqués.
+    private uint contextTerritory = uint.MaxValue;
+    private string? tabBeforeContext;
+    private string? contextTabId;
+    private HashSet<ChatKind> contextHidden = new();
     private int filterVersion;
     private ulong loadedCharacter;
     private string mentionedName = string.Empty;
@@ -123,6 +137,8 @@ public sealed class Plugin : IDalamudPlugin
             Configuration.Tabs = ChatTabPresets.Default();
 
         Game = new GameChat();
+        Game.AutoTranslate.Preload();
+        Players = new PlayerActions();
         Colors = new ChannelColors(Configuration);
         History = new ChatHistoryStore(
             Path.Combine(PluginInterface.GetPluginConfigDirectory(), "history"),
@@ -174,6 +190,7 @@ public sealed class Plugin : IDalamudPlugin
         Game.CanTakeActivation = null;
         Game.BlockActivation = null;
         Game.Dispose(); // rend le chat du jeu
+        Players.Dispose();
 
         WindowSystem.RemoveAllWindows();
         chatWindow.Dispose();
@@ -233,7 +250,13 @@ public sealed class Plugin : IDalamudPlugin
                 RecentTells.Note(line.Author);
 
             if (!IsMuted(line))
-                PlayAlertFor(line);
+            {
+                if (TellConversations.KeyOf(line) is { } person)
+                    Conversations.Note(line, seen: IsConversationShown(person));
+
+                if (!contextHidden.Contains(line.Kind))
+                    PlayAlertFor(line);
+            }
         }
 
         Messages.Add(line);
@@ -298,6 +321,14 @@ public sealed class Plugin : IDalamudPlugin
                 Messages.Add(line);
         }
 
+        // Les conversations privées reprennent dans l'ordre, en gardant les non-lus de cette session.
+        var unread = Conversations.All.ToDictionary(c => c.Key, c => c.Unread);
+        Conversations.Clear();
+        foreach (var line in loaded.Concat(current).Where(l => !IsMuted(l)))
+            Conversations.Note(line, seen: true);
+        foreach (var conversation in Conversations.All)
+            conversation.Unread = unread.GetValueOrDefault(conversation.Key);
+
         foreach (var line in current)
         {
             Messages.Add(line);
@@ -329,6 +360,7 @@ public sealed class Plugin : IDalamudPlugin
         if (detachedWindowsDirty)
             SyncDetachedWindows();
 
+        UpdateContext();
         UpdateFeeds();
 
         var now = DateTime.UtcNow;
@@ -355,6 +387,7 @@ public sealed class Plugin : IDalamudPlugin
         loadedCharacter = character;
         History.SelectCharacter(character);
         RecentTells.Clear();
+        Conversations.Clear();
         Messages.Clear();
         foreach (var line in early)
             Messages.Add(line);
@@ -503,7 +536,68 @@ public sealed class Plugin : IDalamudPlugin
         line.Author != null && Configuration.MutedPlayers.Count > 0 &&
         Configuration.MutedPlayers.Contains(line.Author.Text, StringComparer.OrdinalIgnoreCase);
 
-    private bool IsHidden(ChatLine line) => IsMuted(line) || spam.Matches(line);
+    private bool IsHidden(ChatLine line) => IsMuted(line) || spam.Matches(line) || contextHidden.Contains(line.Kind);
+
+    /// <summary>Le message privé est-il déjà à l'écran ? Alors il ne compte pas comme non lu sur sa pastille.</summary>
+    private bool IsConversationShown(string person)
+    {
+        var feed = ActiveFeed;
+        return Configuration.ChatVisible && feed.Settings.Kinds.Contains(ChatKind.TellIncoming) &&
+               (feed.Partner == null || feed.Partner == person);
+    }
+
+    // ---------------------------------------------------------------- Selon le contexte
+
+    private void UpdateContext()
+    {
+        var territory = (uint)ClientState.TerritoryType;
+        if (territory == contextTerritory)
+            return;
+
+        contextTerritory = territory;
+        var row = DataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory);
+        var next = row is { } zone
+            ? ChatContexts.Classify(zone.TerritoryIntendedUse.RowId, zone.ContentFinderCondition.ValueNullable?.ContentType.RowId ?? 0)
+            : ChatContext.Elsewhere;
+
+        if (territory != 0 && next != Context)
+            EnterContext(next);
+    }
+
+    private void EnterContext(ChatContext next)
+    {
+        // En sortant, l'onglet d'avant revient, si tu n'en as pas changé entre-temps.
+        if (tabBeforeContext != null && ActiveFeed.Settings.Id == contextTabId)
+            SelectTab(Configuration.Tabs.FindIndex(t => t.Id == tabBeforeContext));
+
+        tabBeforeContext = null;
+        contextTabId = null;
+        Context = next;
+
+        if (Configuration.RuleFor(next) is { TabId.Length: > 0 } rule)
+        {
+            var index = Configuration.Tabs.FindIndex(t => t.Id == rule.TabId && !t.Detached);
+            if (index >= 0 && index != Configuration.ActiveTab)
+            {
+                tabBeforeContext = ActiveFeed.Settings.Id;
+                contextTabId = rule.TabId;
+                SelectTab(index);
+            }
+        }
+
+        ContextRulesChanged();
+    }
+
+    /// <summary>À appeler quand les canaux masqués d'un contexte changent : la règle s'applique tout de suite.</summary>
+    public void ContextRulesChanged()
+    {
+        var hidden = ChatContexts.HiddenKinds(Configuration.RuleFor(Context)?.Hidden ?? new List<ChatSection>());
+        if (hidden.SetEquals(contextHidden))
+            return;
+
+        contextHidden = hidden;
+        filterVersion++;
+    }
 
     /// <summary>À appeler quand la liste de l'anti-spam change : les messages déjà reçus suivent la nouvelle règle.</summary>
     public void SpamRulesChanged()

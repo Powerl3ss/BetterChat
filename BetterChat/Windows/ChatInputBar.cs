@@ -25,6 +25,7 @@ public sealed class ChatInputBar
     private readonly InputHistory history;
     private readonly Plugin plugin;
     private readonly MessageList messages;
+    private readonly ChatWindow chat;
 
     private bool focusedByCode;
 
@@ -39,6 +40,20 @@ public sealed class ChatInputBar
     // Canaux parcourus avec Tab quand aucune commande n'est proposée.
     private bool cycleChannelRequested;
 
+    // Autotraduction : la fenêtre de recherche, le mot qu'elle remplacera, les résultats.
+    private const string AutoTranslatePopup = "##autoTranslate";
+    private const int AutoTranslateResultLimit = 50;
+    private bool autoTranslateRequested;
+    private bool autoTranslateTabRequested;
+    private bool autoTranslateFocus;
+    private bool autoTranslateOpen;
+    private string autoTranslateQuery = string.Empty;
+    private string autoTranslateResultsFor = "\0";
+    private int autoTranslateStart;
+    private int autoTranslateSelected;
+    private List<AutoTranslateEntry> autoTranslateResults = new();
+    private Vector2 inputMin;
+
     private List<CommandSuggestion> suggestions = new();
     private int selectedSuggestion = -1;
     private string suggestionsFor = string.Empty;
@@ -49,10 +64,11 @@ public sealed class ChatInputBar
     private string? inputError;
     private double inputErrorUntil;
 
-    public ChatInputBar(Plugin plugin, MessageList messages)
+    public ChatInputBar(Plugin plugin, MessageList messages, ChatWindow chat)
     {
         this.plugin = plugin;
         this.messages = messages;
+        this.chat = chat;
         history = plugin.SentMessages;
         inputCallback = OnInputCallback;
     }
@@ -144,11 +160,157 @@ public sealed class ChatInputBar
 
         ImGui.SameLine(0, 6f * S);
         ImGui.SetCursorPosY(rowY);
-        DrawTextInput(size.X - pad * 2f - pillW - 6f * S, channel);
+        DrawTextInput(size.X - pad * 2f - pillW - 6f * S - rowH - 4f * S, channel);
+        inputMin = ImGui.GetItemRectMin();
 
         DrawInputFeedback();
         DrawSuggestions();
         DrawMacroPreview();
+
+        ImGui.SameLine(0, 4f * S);
+        ImGui.SetCursorPosY(rowY);
+        if (chat.IconButton("##autoTranslateButton", FontAwesomeIcon.Language, rowH, "Autotraduction\nTab après un mot : le chercher dans la liste du jeu", autoTranslateOpen))
+            OpenAutoTranslate();
+
+        DrawAutoTranslate();
+    }
+
+    // ------------------------------------------------------------ Autotraduction
+
+    /// <summary>Ouvre la recherche sur le dernier mot tapé : le mot choisi le remplacera.</summary>
+    private void OpenAutoTranslate()
+    {
+        var (start, word) = AutoTranslateText.LastWord(inputText);
+        autoTranslateStart = start;
+        autoTranslateQuery = word;
+        autoTranslateSelected = 0;
+        autoTranslateRequested = true;
+    }
+
+    private void DrawAutoTranslate()
+    {
+        if (autoTranslateRequested)
+        {
+            autoTranslateRequested = false;
+            autoTranslateFocus = true;
+            ImGui.OpenPopup(AutoTranslatePopup);
+        }
+
+        ImGui.SetNextWindowPos(inputMin - new Vector2(0f, 6f * S), ImGuiCond.Always, new Vector2(0f, 1f));
+        using var style = Tip.PushPopupStyle();
+        autoTranslateOpen = ImGui.BeginPopup(AutoTranslatePopup);
+        if (!autoTranslateOpen)
+            return;
+
+        var width = 340f * S;
+        if (autoTranslateFocus)
+        {
+            ImGui.SetKeyboardFocusHere();
+            autoTranslateFocus = false;
+        }
+
+        ImGui.SetNextItemWidth(width);
+        using (ImRaii.PushColor(ImGuiCol.FrameBg, InputBg))
+            ImGui.InputTextWithHint("##autoTranslateQuery", "Chercher un mot de l'autotraduction...", ref autoTranslateQuery, 64);
+
+        var entries = plugin.Game.AutoTranslate.Entries;
+        if (entries == null)
+            ImGui.TextColored(TextDim, "Lecture de la liste du jeu...");
+        else
+            DrawAutoTranslateResults(entries, width);
+
+        if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+        {
+            ImGui.CloseCurrentPopup();
+            focusRequested = true;
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DrawAutoTranslateResults(IReadOnlyList<AutoTranslateEntry> entries, float width)
+    {
+        if (autoTranslateResultsFor != autoTranslateQuery)
+        {
+            autoTranslateResultsFor = autoTranslateQuery;
+            autoTranslateResults = AutoTranslateSearch.Find(entries, autoTranslateQuery, AutoTranslateResultLimit);
+            autoTranslateSelected = 0;
+        }
+
+        if (autoTranslateQuery.Trim().Length == 0)
+        {
+            ImGui.TextColored(TextDim, "Tape un mot pour le chercher.");
+            return;
+        }
+
+        if (autoTranslateResults.Count == 0)
+        {
+            ImGui.TextColored(TextDim, "Aucun mot trouvé.");
+            return;
+        }
+
+        // Les flèches choisissent, Entrée valide : le clavier suffit.
+        var moved = false;
+        if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
+        {
+            autoTranslateSelected = Math.Min(autoTranslateSelected + 1, autoTranslateResults.Count - 1);
+            moved = true;
+        }
+        if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
+        {
+            autoTranslateSelected = Math.Max(autoTranslateSelected - 1, 0);
+            moved = true;
+        }
+
+        AutoTranslateEntry? picked = null;
+        if (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
+            picked = autoTranslateResults[autoTranslateSelected];
+
+        var lineH = ImGui.GetTextLineHeight();
+        var rowH = MathF.Round(lineH + 6f * S);
+        using (ImRaii.Child("##autoTranslateList", new Vector2(width, MathF.Min(autoTranslateResults.Count, 8) * rowH), false))
+        {
+            var drawList = ImGui.GetWindowDrawList();
+            for (var i = 0; i < autoTranslateResults.Count; i++)
+            {
+                var entry = autoTranslateResults[i];
+                var min = ImGui.GetCursorScreenPos();
+                if (ImGui.InvisibleButton($"##autoTranslate{i}", new Vector2(width, rowH)))
+                    picked = entry;
+
+                var hovered = ImGui.IsItemHovered();
+                if (hovered && ImGui.GetIO().MouseDelta != Vector2.Zero)
+                    autoTranslateSelected = i;
+
+                var selected = i == autoTranslateSelected;
+                if (selected && moved)
+                    ImGui.SetScrollHereY();
+                if (selected)
+                    drawList.AddRectFilled(min, min + new Vector2(width, rowH), Col(Accent with { W = 0.18f }), 6f * S);
+
+                var textY = min.Y + MathF.Round((rowH - lineH) / 2f);
+                var textW = ImGui.CalcTextSize(entry.Text).X;
+                drawList.AddText(new Vector2(min.X + 6f * S, textY), Col(selected ? Accent : TextMain), entry.Text);
+
+                // La catégorie, à droite, si elle tient.
+                var titleW = ImGui.CalcTextSize(entry.Title).X;
+                if (entry.Title.Length > 0 && 6f * S + textW + 16f * S + titleW < width - 6f * S)
+                    drawList.AddText(new Vector2(min.X + width - 6f * S - titleW, textY), Col(TextDim), entry.Title);
+            }
+        }
+
+        if (picked != null)
+            PickAutoTranslate(picked);
+    }
+
+    private void PickAutoTranslate(AutoTranslateEntry entry)
+    {
+        plugin.Game.AutoTranslate.Remember(entry);
+        var start = Math.Min(autoTranslateStart, inputText.Length);
+        inputText = inputText[..start] + AutoTranslateText.Wrap(entry.Text) + " ";
+        ImGui.CloseCurrentPopup();
+        focusRequested = true;
+        cursorToEnd = true;
     }
 
     /// <summary>Ce que deviendront &lt;t&gt;, &lt;flag&gt; et les autres raccourcis, juste au-dessus de la saisie.</summary>
@@ -221,7 +383,7 @@ public sealed class ChatInputBar
 
         Tip.DotLine(color, label);
         Tip.Hint("Clic : changer de canal");
-        Tip.Hint("Tab dans la saisie : canal suivant");
+        Tip.Hint("Tab dans une saisie vide : canal suivant");
     }
 
     // Menu des canaux : une ligne par canal (point et nom de sa couleur, commande à droite),
@@ -426,6 +588,12 @@ public sealed class ChatInputBar
         {
             cycleChannelRequested = false;
             CycleChannel();
+        }
+
+        if (autoTranslateTabRequested)
+        {
+            autoTranslateTabRequested = false;
+            OpenAutoTranslate();
         }
 
         UpdateSuggestions();
@@ -644,9 +812,14 @@ public sealed class ChatInputBar
                 Replace(data, choice.Command + " ");
                 selectedSuggestion = -1;
             }
-            else
+            else if (data.BufTextLen == 0)
             {
                 cycleChannelRequested = true;
+            }
+            else
+            {
+                // Comme dans le jeu : Tab après un mot ouvre l'autotraduction.
+                autoTranslateTabRequested = true;
             }
         }
 

@@ -88,6 +88,25 @@ public sealed class ChatTabSettings
     /// <summary>Canal choisi en ouvrant l'onglet. Autre : ne rien changer.</summary>
     public ChatKind InputChannel { get; set; } = ChatKind.Other;
 
+    /// <summary>Messages gardés en haut de l'onglet, le plus récent en premier.</summary>
+    public List<PinnedMessage> Pinned { get; set; } = new();
+
+    public PinnedMessage? PinOf(ChatLine line) => Pinned.Find(p => p.Is(line));
+
+    /// <summary>Épingle le message, ou le retire s'il l'était déjà.</summary>
+    public void TogglePin(ChatLine line)
+    {
+        if (PinOf(line) is { } pinned)
+        {
+            Pinned.Remove(pinned);
+            return;
+        }
+
+        Pinned.Insert(0, PinnedMessage.Of(line));
+        if (Pinned.Count > PinnedMessage.LimitPerTab)
+            Pinned.RemoveAt(Pinned.Count - 1);
+    }
+
     public bool Accepts(ChatLine line)
     {
         if (!Kinds.Contains(line.Kind))
@@ -168,6 +187,7 @@ public sealed class ChatFeed
     private readonly Dictionary<long, int> repeats = new();
     private DateTime lastRepeatTime;
     private ChatSearch query = ChatSearch.Empty;
+    private string? partner;
     private string search = string.Empty;
     private long lastId;
     private int generation = -1;
@@ -195,6 +215,18 @@ public sealed class ChatFeed
     public bool IsActive { get; set; }
 
     public string Search => search;
+
+    /// <summary>Messages privés d'une seule personne (voir <see cref="TellConversations.KeyOf"/>). Null : tout l'onglet.</summary>
+    public string? Partner => partner;
+
+    public void SetPartner(string? key)
+    {
+        if (key == partner)
+            return;
+
+        partner = key;
+        generation = -1; // reconstruction à la prochaine mise à jour
+    }
 
     /// <summary>Nombre d'exemplaires de ce message : 1 s'il n'a pas été répété.</summary>
     public int RepeatCount(ChatLine line) => repeats.TryGetValue(line.Id, out var count) ? count : 1;
@@ -298,7 +330,8 @@ public sealed class ChatFeed
         string.Equals(previous.BodyText, line.BodyText, StringComparison.Ordinal) &&
         string.Equals(previous.AuthorKey, line.AuthorKey, StringComparison.Ordinal);
 
-    private bool Matches(ChatLine line) => query.IsEmpty || query.Matches(line);
+    private bool Matches(ChatLine line) =>
+        (partner == null || TellConversations.KeyOf(line) == partner) && (query.IsEmpty || query.Matches(line));
 }
 
 /// <summary>Position verticale de chaque message d'une liste, pour ne dessiner que ceux à l'écran.</summary>

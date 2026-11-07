@@ -80,6 +80,8 @@ public sealed class MessageList
     private ChatLink? contextLink;
     private ChatLink? pendingUrl;
     private string colorPlayer = string.Empty;
+    private int pinnedIndex;
+    private PinnedMessage? pinnedMenuTarget;
 
     // Sélection à la souris : du point où le bouton a été enfoncé jusqu'au curseur.
     private readonly record struct TextPos(long LineId, int Offset);
@@ -103,6 +105,14 @@ public sealed class MessageList
 
     public void Draw(ChatFeed feed, Vector2 size)
     {
+        // Les messages épinglés passent au-dessus de la liste.
+        if (feed.Settings.Pinned.Count > 0)
+        {
+            var barH = MathF.Round(ImGui.GetTextLineHeight() + 12f * S);
+            DrawPinnedBar(feed, size.X, barH);
+            size.Y = MathF.Max(size.Y - barH, 10f);
+        }
+
         using var child = ImRaii.Child("##messages", size, false, ImGuiWindowFlags.NoMove);
         if (!child.Success)
             return;
@@ -623,6 +633,117 @@ public sealed class MessageList
         drawList.AddText(pos, Col(color), text);
     }
 
+    // ------------------------------------------------------------ Messages épinglés
+
+    /// <summary>Le message épinglé affiché en haut de l'onglet. Un clic passe au suivant, s'il y en a plusieurs.</summary>
+    private void DrawPinnedBar(ChatFeed feed, float width, float height)
+    {
+        var pins = feed.Settings.Pinned;
+        if (pinnedIndex >= pins.Count)
+            pinnedIndex = 0;
+        var pin = pins[pinnedIndex];
+
+        var start = ImGui.GetCursorPos();
+        var min = ImGui.GetCursorScreenPos();
+        var max = min + new Vector2(width, height);
+        var clicked = ImGui.InvisibleButton("##pinnedBar", new Vector2(width, height));
+        var hovered = ImGui.IsItemHovered();
+        var rightClicked = hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Right);
+
+        var drawList = ImGui.GetWindowDrawList();
+        var thickness = MathF.Max(1f, MathF.Round(S));
+        drawList.AddRectFilled(min, max, Col(Accent with { W = hovered ? 0.16f : 0.10f }));
+        drawList.AddRectFilled(min, new Vector2(min.X + 3f * S, max.Y), Col(Accent with { W = 0.85f }));
+        drawList.AddRectFilled(new Vector2(min.X, max.Y - thickness), max, Col(Line));
+
+        var lineH = ImGui.GetTextLineHeight();
+        var left = min.X + EdgeMargin * S;
+        var right = max.X - EdgeMargin * S;
+        var textY = MathF.Round(min.Y + (height - lineH) / 2f);
+
+        ConfigWindow.DrawIconCentered(FontAwesomeIcon.Thumbtack, new Vector2(left, min.Y), new Vector2(left + lineH, max.Y), Accent);
+        left += lineH + 6f * S;
+
+        if (pins.Count > 1)
+        {
+            var counter = $"{pinnedIndex + 1}/{pins.Count}";
+            right -= Measure(counter);
+            DrawOutlinedText(drawList, new Vector2(right, textY), Cfg.SecondaryColor, counter);
+            right -= 8f * S;
+        }
+
+        DrawOutlinedText(drawList, new Vector2(left, textY), plugin.Colors.Of(pin.Kind), Fit(pin.CopyText, right - left));
+
+        if (clicked && pins.Count > 1)
+            pinnedIndex = (pinnedIndex + 1) % pins.Count;
+
+        if (rightClicked)
+        {
+            pinnedMenuTarget = pin;
+            ImGui.OpenPopup("##pinnedMenu");
+        }
+
+        if (hovered && !rightClicked)
+            DrawPinnedTooltip(pin, pins.Count > 1);
+
+        DrawPinnedMenu(feed);
+        ImGui.SetCursorPos(start + new Vector2(0f, height));
+    }
+
+    private void DrawPinnedTooltip(PinnedMessage pin, bool several)
+    {
+        using var tooltip = Tip.Begin();
+        Tip.Title(pin.Sender.Length > 0 ? pin.Sender : ChatKinds.Info(pin.Kind).Label);
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + 320f * S);
+        ImGui.TextUnformatted(pin.Text);
+        ImGui.PopTextWrapPos();
+        Tip.Note(pin.TimeUtc.ToLocalTime().ToString("dd/MM HH:mm"));
+        if (several)
+            Tip.Hint("Clic : message épinglé suivant");
+        Tip.Hint("Clic droit : copier, désépingler");
+    }
+
+    private void DrawPinnedMenu(ChatFeed feed)
+    {
+        if (!Tip.BeginMenu("##pinnedMenu"))
+            return;
+
+        if (pinnedMenuTarget is { } pin)
+        {
+            if (Tip.MenuItem("Copier le message", FontAwesomeIcon.Copy))
+                ImGui.SetClipboardText(pin.CopyText);
+
+            if (Tip.MenuItem("Désépingler", FontAwesomeIcon.Thumbtack, danger: true))
+            {
+                feed.Settings.Pinned.Remove(pin);
+                pinnedMenuTarget = null;
+                Cfg.Save();
+            }
+        }
+
+        Tip.EndMenu();
+    }
+
+    /// <summary>Le texte coupé avec « ... » pour tenir dans la largeur.</summary>
+    private static string Fit(string text, float width)
+    {
+        if (ImGui.CalcTextSize(text).X <= width)
+            return text;
+
+        // Recherche par dichotomie de la plus longue partie qui tient avec les points.
+        int low = 0, high = text.Length;
+        while (low < high)
+        {
+            var middle = (low + high + 1) / 2;
+            if (ImGui.CalcTextSize(text[..middle] + "...").X <= width)
+                low = middle;
+            else
+                high = middle - 1;
+        }
+
+        return text[..low].TrimEnd() + "...";
+    }
+
     // ------------------------------------------------------------ Sélection à la souris
 
     private bool HasSelection => selectionAnchor != selectionEnd;
@@ -920,6 +1041,14 @@ public sealed class MessageList
                 if (fromOther)
                     DrawPlayerActions(line.Author!);
 
+                var pinned = feed.Settings.PinOf(line) != null;
+                if (Tip.MenuItem(pinned ? "Désépingler" : "Épingler dans cet onglet", FontAwesomeIcon.Thumbtack))
+                {
+                    feed.Settings.TogglePin(line);
+                    pinnedIndex = 0;
+                    Cfg.Save();
+                }
+
                 if (Tip.MenuItem("Copier le message", FontAwesomeIcon.Copy))
                     ImGui.SetClipboardText(line.CopyText);
             }
@@ -1033,6 +1162,19 @@ public sealed class MessageList
         {
             plugin.Game.SwitchToTell(player);
             Input?.FocusInput();
+        }
+
+        // Comme le menu du jeu : chaque action n'apparaît que si le jeu peut la faire pour ce joueur.
+        if (player.Text != plugin.LocalName)
+        {
+            if (PlayerActions.CanInvite(player) && Tip.MenuItem("Inviter dans le groupe", FontAwesomeIcon.UserPlus))
+                PlayerActions.Invite(player);
+            if (PlayerActions.CanExamine(player) && Tip.MenuItem("Examiner", FontAwesomeIcon.Search))
+                PlayerActions.Examine(player);
+            if (PlayerActions.CanOpenPlate(player) && Tip.MenuItem("Voir sa plaque d'aventurier", FontAwesomeIcon.IdCard))
+                PlayerActions.OpenPlate(player);
+            if (plugin.Players.CanAddFriend(player) && Tip.MenuItem("Ajouter en ami", FontAwesomeIcon.UserFriends))
+                plugin.Players.AddFriend(player);
         }
 
         if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))

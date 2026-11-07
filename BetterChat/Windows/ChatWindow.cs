@@ -63,7 +63,7 @@ public sealed partial class ChatWindow : Window, IDisposable
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
         messages = new MessageList(plugin);
-        input = new ChatInputBar(plugin, messages);
+        input = new ChatInputBar(plugin, messages, this);
         messages.Input = input;
     }
 
@@ -159,12 +159,17 @@ public sealed partial class ChatWindow : Window, IDisposable
             var inputH = MathF.Round(ImGui.GetTextLineHeight() + 20f * S);
             var searchH = UpdateSearchReveal(inputH);
 
+            var tellsH = ConversationBarHeight();
+
             DrawTabBar(size, tabH);
             if (searchH > 0f)
                 DrawRevealedSearchBar(size, tabH, searchH, inputH);
+            if (tellsH > 0f)
+                DrawConversationBar(size, tabH + searchH, tellsH);
 
-            ImGui.SetCursorPos(new Vector2(0, tabH + searchH));
-            messages.Draw(plugin.ActiveFeed, new Vector2(size.X, MathF.Max(size.Y - tabH - searchH - inputH, 10f)));
+            var top = tabH + searchH + tellsH;
+            ImGui.SetCursorPos(new Vector2(0, top));
+            messages.Draw(plugin.ActiveFeed, new Vector2(size.X, MathF.Max(size.Y - top - inputH, 10f)));
 
             ImGui.SetCursorPos(new Vector2(0, size.Y - inputH));
             input.Draw(size, inputH);

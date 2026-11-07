@@ -28,7 +28,7 @@ public sealed class DetachedTabWindow : Window
         this.chat = chat;
         Tab = tab;
         messages = new MessageList(plugin);
-        input = new ChatInputBar(plugin, messages) { ClickedIn = OnClickedIn };
+        input = new ChatInputBar(plugin, messages, chat) { ClickedIn = OnClickedIn };
         messages.Input = input;
 
         RespectCloseHotkey = false;
