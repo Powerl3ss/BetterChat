@@ -36,7 +36,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 **Écrire**
 - Entrée ouvre la saisie, comme dans le jeu. La pastille de couleur montre où partira le message, et suit ce que tu tapes (`/p bonjour`).
 - Dans une saisie vide, Tab passe au canal suivant, parmi ceux que tu peux vraiment utiliser (groupe, compagnie, linkshells...).
-- Autotraduction : Tab après un mot, ou le bouton à droite de la saisie, le cherche dans la liste du jeu.
+- Autotraduction : Tab après un mot, ou le bouton à droite de la saisie, le cherche dans la liste du jeu. Tab ou Entrée valide le mot choisi.
 - Les flèches rappellent tes derniers messages, sans perdre ce que tu étais en train d'écrire.
 - En tapant `/`, les commandes du jeu et des plugins sont proposées et se complètent avec Tab.
 - Un aperçu montre ce que donneront `<t>`, `<flag>` et les autres raccourcis du jeu avant l'envoi.

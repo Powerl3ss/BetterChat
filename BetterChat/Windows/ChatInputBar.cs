@@ -22,6 +22,8 @@ public sealed class ChatInputBar
     private const float ErrorSeconds = 4f;
 
     private readonly ImGui.ImGuiInputTextCallbackPtrDelegate inputCallback;
+    private readonly ImGui.ImGuiInputTextCallbackPtrDelegate autoTranslateCallback;
+    private bool autoTranslateTabPressed;
     private readonly InputHistory history;
     private readonly Plugin plugin;
     private readonly MessageList messages;
@@ -72,6 +74,7 @@ public sealed class ChatInputBar
         this.chat = chat;
         history = plugin.SentMessages;
         inputCallback = OnInputCallback;
+        autoTranslateCallback = OnAutoTranslateCallback;
     }
 
     private Configuration Cfg => plugin.Configuration;
@@ -262,7 +265,8 @@ public sealed class ChatInputBar
         }
 
         using (ImRaii.PushColor(ImGuiCol.FrameBg, InputBg))
-            ImGui.InputTextWithHint("##autoTranslateQuery", "Chercher un mot de l'autotraduction...", ref autoTranslateQuery, 64);
+            ImGui.InputTextWithHint("##autoTranslateQuery", "Chercher un mot de l'autotraduction...", ref autoTranslateQuery, 64,
+                                    ImGuiInputTextFlags.CallbackCompletion, autoTranslateCallback);
 
         var active = ImGui.IsItemActive();
         var deactivated = ImGui.IsItemDeactivated();
@@ -283,7 +287,10 @@ public sealed class ChatInputBar
             }
         }
 
-        var enter = deactivated && (ImGui.IsKeyPressed(ImGuiKey.Enter, false) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter, false));
+        // Tab complète avec le mot choisi, comme Entrée : c'est le geste de l'autotraduction du jeu.
+        var tab = autoTranslateTabPressed;
+        autoTranslateTabPressed = false;
+        var enter = tab || (deactivated && (ImGui.IsKeyPressed(ImGuiKey.Enter, false) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter, false)));
         var escape = deactivated && ImGui.IsKeyPressed(ImGuiKey.Escape, false);
 
         ImGui.SetCursorPos(new Vector2(closeX, MathF.Round(top + (height - close) / 2f)));
@@ -291,6 +298,13 @@ public sealed class ChatInputBar
             CloseAutoTranslate();
         else if (enter && autoTranslateResults.Count > 0)
             PickAutoTranslate(autoTranslateResults[autoTranslateSelected]);
+    }
+
+    private int OnAutoTranslateCallback(ImGuiInputTextCallbackDataPtr data)
+    {
+        if (data.EventFlag.HasFlag(ImGuiInputTextFlags.CallbackCompletion))
+            autoTranslateTabPressed = true;
+        return 0;
     }
 
     private void UpdateAutoTranslateResults()
