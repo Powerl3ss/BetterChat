@@ -914,6 +914,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 {
                     changed |= SliderRow("Opacité du fond", "0 = fond complètement retiré.", Cfg.WindowOpacity, 0f, 1f, "%.2f", v => Cfg.WindowOpacity = v);
                 });
+
+                SectionTitle("Objets");
+                Card(() =>
+                {
+                    changed |= ToggleRow("Prix du marché au survol",
+                                         "Le prix le plus bas sur ton monde et ton centre de données, demandé au site Universalis. Désactivé, le plugin ne contacte aucun site.",
+                                         Cfg.MarketPrices, v => Cfg.MarketPrices = v);
+                });
                 break;
 
             default:
@@ -958,6 +966,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             Cfg.CommandSuggestions = d.CommandSuggestions;
             Cfg.ShowMacroPreview = d.ShowMacroPreview;
             Cfg.WindowOpacity = d.WindowOpacity;
+            Cfg.MarketPrices = d.MarketPrices;
             Cfg.AccentColor = d.AccentColor;
             Cfg.SecondaryColor = d.SecondaryColor;
             Cfg.UseGameColors = d.UseGameColors;

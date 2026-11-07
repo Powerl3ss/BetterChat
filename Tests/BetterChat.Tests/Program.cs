@@ -37,6 +37,11 @@ var tests = new (string Name, Action Run)[]
     ("Recherche : préfixe inconnu ou date illisible restent du texte", Tests.SearchUnknownPrefixIsText),
     ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
     ("Icône du nom : rôle de chaque job", Tests.RoleIcons),
+    ("Découpage : un message court reste entier", Tests.SplitShortMessage),
+    ("Découpage : entre deux mots, sous la limite, canal gardé", Tests.SplitKeepsWordsAndChannel),
+    ("Découpage : de préférence après une fin de phrase", Tests.SplitAtSentence),
+    ("Découpage : destinataire gardé, autre commande refusée", Tests.SplitTellAndCommands),
+    ("Découpage : un mot de l'autotraduction n'est pas coupé", Tests.SplitKeepsAutoTranslate),
     ("Séparateurs : changement de date", Tests.DateSeparators),
     ("Séparateurs : texte de la date", Tests.DateLabels),
     ("Joueur : le monde « Dev » du jeu n'est pas un vrai monde", Tests.PlaceholderWorldIgnored),
@@ -1352,5 +1357,60 @@ internal static class Tests
         Same(NameIcons.CasterIcon, NameIcons.RoleIcon(42), "pictomancien");
         Same(NameIcons.JobIcon(8), NameIcons.RoleIcon(8), "un artisan garde son icône de job");
         Same(0u, NameIcons.JobIcon(0), "job inconnu");
+    }
+
+    private static string Words(int count, string word = "mot") => string.Join(' ', Enumerable.Repeat(word, count));
+
+    public static void SplitShortMessage()
+    {
+        var parts = MessageSplitter.Split("/p bonjour", 500)!;
+        Same(1, parts.Count, "un seul message");
+        Same("/p bonjour", parts[0], "inchangé");
+    }
+
+    public static void SplitKeepsWordsAndChannel()
+    {
+        var message = "/fc " + Words(200, "éclat"); // 200 mots de 6 octets
+        var parts = MessageSplitter.Split(message, 500)!;
+        Check(parts.Count == 3, $"trois messages : {parts.Count}");
+        foreach (var part in parts)
+        {
+            Check(ChatText.ByteLength(part) <= 500, $"trop long : {ChatText.ByteLength(part)}");
+            Check(part.StartsWith("/fc ", StringComparison.Ordinal), "canal gardé");
+            Check(part[4..].Split(' ').All(w => w == "éclat"), "mot coupé");
+        }
+
+        Same(200, parts.Sum(p => p[4..].Split(' ').Length), "aucun mot perdu");
+
+        var plain = MessageSplitter.Split(Words(150), 500)!;
+        Same(2, plain.Count, "sans commande");
+        Check(!plain[1].StartsWith('/'), "pas de commande ajoutée");
+    }
+
+    public static void SplitAtSentence()
+    {
+        var message = Words(80) + ". " + Words(60);
+        var parts = MessageSplitter.Split(message, 500)!;
+        Same(2, parts.Count, "deux messages");
+        Check(parts[0].EndsWith("mot.", StringComparison.Ordinal), $"coupé après la phrase : {parts[0][^10..]}");
+    }
+
+    public static void SplitTellAndCommands()
+    {
+        var parts = MessageSplitter.Split("/t Jean Dupont@Moogle " + Words(150), 500)!;
+        Check(parts.Count == 2 && parts.All(p => p.StartsWith("/t Jean Dupont@Moogle ", StringComparison.Ordinal)), "destinataire gardé");
+
+        var target = MessageSplitter.Split("/t <t> " + Words(150), 500)!;
+        Check(target.All(p => p.StartsWith("/t <t> ", StringComparison.Ordinal)), "cible gardée");
+
+        Check(MessageSplitter.Split("/echo " + Words(150), 500) == null, "une autre commande ne se découpe pas");
+    }
+
+    public static void SplitKeepsAutoTranslate()
+    {
+        var entry = AutoTranslateText.Wrap("Pouvez-vous m'aider ?");
+        var message = Words(95) + " " + entry + " " + Words(30);
+        var parts = MessageSplitter.Split(message, 400)!;
+        Check(parts.Count(p => p.Contains(entry, StringComparison.Ordinal)) == 1, "le mot reste entier");
     }
 }

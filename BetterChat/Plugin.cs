@@ -66,6 +66,10 @@ public sealed class Plugin : IDalamudPlugin
 
     internal PlayerActions Players { get; }
 
+    /// <summary>Les prix du marché (Universalis), demandés seulement si le réglage est activé.</summary>
+
+    public MarketPrices Market { get; }
+
     /// <summary>Où tu te trouves : donjon, raid, ville ou ailleurs.</summary>
     public ChatContext Context { get; private set; } = ChatContext.Elsewhere;
     internal GameIconAtlas Icons { get; } = new();
@@ -147,6 +151,7 @@ public sealed class Plugin : IDalamudPlugin
         Game = new GameChat();
         Game.AutoTranslate.Preload();
         Players = new PlayerActions();
+        Market = new MarketPrices(PluginInterface.Manifest.AssemblyVersion.ToString());
         Colors = new ChannelColors(Configuration);
         History = new ChatHistoryStore(
             Path.Combine(PluginInterface.GetPluginConfigDirectory(), "history"),
@@ -199,6 +204,7 @@ public sealed class Plugin : IDalamudPlugin
         Game.BlockActivation = null;
         Game.Dispose(); // rend le chat du jeu
         Players.Dispose();
+        Market.Dispose();
 
         WindowSystem.RemoveAllWindows();
         chatWindow.Dispose();

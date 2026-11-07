@@ -405,3 +405,178 @@ public sealed class RecentTells
 
     public void Clear() => people.Clear();
 }
+
+/// <summary>
+/// Découpe un message trop long pour le jeu en plusieurs messages, entre deux mots, de préférence après une fin de
+/// phrase. Chaque morceau garde la commande du canal (<c>/p</c>, <c>/t Prénom Nom@Monde</c>...), et un mot de
+/// l'autotraduction n'est jamais coupé.
+/// </summary>
+public static class MessageSplitter
+{
+    /// <summary>En dessous de cette part de la place, une fin de phrase ne vaut pas de couper plus tôt.</summary>
+    private const float SentenceCutMinimum = 0.6f;
+
+    /// <returns>
+    /// Les messages à envoyer, dans l'ordre : le message lui-même s'il tient. Null s'il ne peut pas être découpé :
+    /// une commande autre qu'un canal, ou rien après la commande.
+    /// </returns>
+    public static List<string>? Split(string message, int maxBytes)
+    {
+        if (ChatText.ByteLength(message) <= maxBytes)
+            return new List<string> { message };
+
+        var prefix = ChannelPrefix(message);
+        if (prefix == null)
+            return null;
+
+        var budget = maxBytes - ChatText.ByteLength(prefix);
+        var words = Words(message[prefix.Length..]);
+        if (budget <= 0 || words.Count == 0)
+            return null;
+
+        var parts = new List<string>();
+        var current = new List<string>();
+        var used = 0;
+
+        void Close(int count)
+        {
+            parts.Add(prefix + string.Join(' ', current.GetRange(0, count)));
+            current.RemoveRange(0, count);
+            used = current.Count == 0 ? 0 : ChatText.ByteLength(string.Join(' ', current));
+        }
+
+        foreach (var original in words)
+        {
+            // Un mot plus long que toute la place (une adresse, une suite de lettres) est coupé là où il faut.
+            foreach (var word in CutLongWord(original, budget))
+            {
+                var size = ChatText.ByteLength(word) + (current.Count > 0 ? 1 : 0);
+                if (current.Count > 0 && used + size > budget)
+                {
+                    Close(SentenceCut(current, budget));
+                    size = ChatText.ByteLength(word) + (current.Count > 0 ? 1 : 0);
+
+                    // Ce qui suit la fin de phrase, plus ce mot, peut encore dépasser : tout part alors d'un bloc.
+                    if (current.Count > 0 && used + size > budget)
+                    {
+                        Close(current.Count);
+                        size = ChatText.ByteLength(word);
+                    }
+                }
+
+                current.Add(word);
+                used += size;
+            }
+        }
+
+        if (current.Count > 0)
+            Close(current.Count);
+
+        return parts;
+    }
+
+    /// <summary>La commande de canal au début du message, espace compris. Vide sans commande. Null : autre commande.</summary>
+    public static string? ChannelPrefix(string message)
+    {
+        if (message.Length == 0 || message[0] != '/')
+            return string.Empty;
+
+        var kind = ChatChannels.FromTypedPrefix(message);
+        if (kind == null)
+            return null;
+
+        // Un message privé tapé garde son destinataire : « /t Prénom Nom@Monde », ou « /t <t> ».
+        var words = 1;
+        if (kind == ChatKind.TellOutgoing)
+        {
+            var afterCommand = message.IndexOf(' ');
+            words = afterCommand >= 0 && afterCommand + 1 < message.Length && message[afterCommand + 1] == '<' ? 2 : 3;
+        }
+
+        var position = 0;
+        for (var i = 0; i < words; i++)
+        {
+            var space = message.IndexOf(' ', position);
+            if (space < 0)
+                return null;
+            position = space + 1;
+        }
+
+        return message[..position];
+    }
+
+    /// <summary>Les mots séparés par des espaces. Un mot de l'autotraduction, même avec des espaces, en est un seul.</summary>
+    private static List<string> Words(string text)
+    {
+        var words = new List<string>();
+        var start = 0;
+        var inEntry = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == AutoTranslateText.Open)
+                inEntry = text.IndexOf(AutoTranslateText.Close, i + 1) > 0;
+            else if (c == AutoTranslateText.Close)
+                inEntry = false;
+            else if (c == ' ' && !inEntry)
+            {
+                if (i > start)
+                    words.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+
+        if (start < text.Length)
+            words.Add(text[start..]);
+        return words;
+    }
+
+    private static IEnumerable<string> CutLongWord(string word, int budget)
+    {
+        if (ChatText.ByteLength(word) <= budget)
+        {
+            yield return word;
+            yield break;
+        }
+
+        var start = 0;
+        var used = 0;
+        for (var i = 0; i < word.Length; i++)
+        {
+            // Une paire de caractères (emoji...) reste entière.
+            var length = char.IsHighSurrogate(word[i]) && i + 1 < word.Length ? 2 : 1;
+            var size = ChatText.ByteLength(word.Substring(i, length));
+            if (used + size > budget && i > start)
+            {
+                yield return word[start..i];
+                start = i;
+                used = 0;
+            }
+
+            used += size;
+            i += length - 1;
+        }
+
+        yield return word[start..];
+    }
+
+    /// <summary>Combien de mots garder dans ce morceau : jusqu'à la dernière fin de phrase si elle est assez loin.</summary>
+    private static int SentenceCut(List<string> words, int budget)
+    {
+        var used = 0;
+        var best = words.Count;
+        var bestFound = false;
+        for (var i = 0; i < words.Count; i++)
+        {
+            used += ChatText.ByteLength(words[i]) + (i > 0 ? 1 : 0);
+            var last = words[i][^1];
+            if (i < words.Count - 1 && last is '.' or '!' or '?' or '…' && used >= budget * SentenceCutMinimum)
+            {
+                best = i + 1;
+                bestFound = true;
+            }
+        }
+
+        return bestFound ? best : words.Count;
+    }
+}

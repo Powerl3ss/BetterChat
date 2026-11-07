@@ -42,6 +42,7 @@ public class Configuration : IPluginConfiguration
     public NameIconKind NameIcon { get; set; } = NameIconKind.Job;
     public float JobIconHeight { get; set; } = 100f; // hauteur du dessin de l'icône, en % de la ligne de texte
     public Dictionary<string, Vector4> PlayerColors { get; set; } = new();
+    public bool MarketPrices { get; set; } = false; // demande les prix à Universalis, un site extérieur
 
     // --- Saisie ---
     public bool KeepFocusAfterSend { get; set; } = false;

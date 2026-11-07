@@ -712,7 +712,7 @@ public sealed class ChatInputBar
                 break;
 
             case SendResult.TooLong:
-                ShowInputError($"Message trop long : {ChatText.ByteLength(text)} / {ChatText.MaxBytes} octets. Il n'a pas été envoyé.");
+                ShowInputError($"Commande trop longue : {ChatText.ByteLength(text)} / {ChatText.MaxBytes}. Elle n'a pas été envoyée.");
                 focusRequested = true;
                 break;
 
@@ -743,11 +743,13 @@ public sealed class ChatInputBar
         else
         {
             inputError = null;
+            // Une lettre accentuée compte double pour le jeu. Au-delà de la limite, le message part en plusieurs fois.
             var bytes = ChatText.ByteLength(inputText);
             if (bytes >= ChatText.MaxBytes - 100)
             {
-                text = $"{bytes} / {ChatText.MaxBytes}";
-                color = bytes > ChatText.MaxBytes ? Danger : TextDim;
+                var parts = bytes > ChatText.MaxBytes ? GameChat.PartCount(inputText) : 1;
+                text = parts > 1 ? $"{bytes} / {ChatText.MaxBytes}  |  envoyé en {parts} messages" : $"{bytes} / {ChatText.MaxBytes}";
+                color = parts == 0 ? Danger : parts > 1 ? Accent : TextDim;
             }
         }
 

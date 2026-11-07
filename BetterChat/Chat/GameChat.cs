@@ -348,6 +348,28 @@ public sealed unsafe class GameChat : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// Répondre à ce message : passe la saisie sur son canal, ou en message privé avec la personne. Faux si on ne peut
+    /// pas y répondre (message système, combat, canal qu'on n'a plus...).
+    /// </summary>
+    public bool CanReply(ChatLine line) => ReplyAction(line) != null;
+
+    public void Reply(ChatLine line) => ReplyAction(line)?.Invoke();
+
+    private System.Action? ReplyAction(ChatLine line)
+    {
+        if (line.Kind is ChatKind.TellIncoming or ChatKind.TellOutgoing)
+        {
+            // Pour un message envoyé, l'auteur retenu est le destinataire.
+            var person = line.Author;
+            return person != null && person.Text.Length > 0 ? () => SwitchToTell(person) : null;
+        }
+
+        // Une emote se passe à portée de voix : on y répond en disant.
+        var kind = line.Kind is ChatKind.StandardEmote or ChatKind.CustomEmote ? ChatKind.Say : line.Kind;
+        return AvailableChannels().Exists(c => c.Kind == kind) ? () => SwitchChannel(kind) : null;
+    }
+
     /// <summary>Passe le jeu en message privé vers ce joueur (les prochains messages partent vers lui).</summary>
     public void SwitchToTell(ChatLink player) => Run($"/tell {player.TellTarget}");
 
@@ -359,27 +381,54 @@ public sealed unsafe class GameChat : IDisposable
         var message = ChatText.Normalize(text);
         if (message.Length == 0)
             return SendResult.Empty;
-        if (AutoTranslateText.Contains(message))
-            return SendWithAutoTranslate(message);
 
-        if (ChatText.ByteLength(message) > ChatText.MaxBytes)
-            return SendResult.TooLong;
-        if (!IsAllowedByGame(message))
-            return SendResult.InvalidCharacters;
+        // Trop long : découpé en plusieurs messages sur le même canal, si c'est un message et non une commande.
+        var first = Encode(message, out var whole);
+        var parts = first == SendResult.TooLong ? MessageSplitter.Split(message, ChatText.MaxBytes) : null;
+        if (parts == null || parts.Count < 2)
+        {
+            if (first == SendResult.Sent)
+                RunBytes(whole);
+            return first;
+        }
 
-        Run(message);
+        // Tout est vérifié avant d'envoyer : jamais un message à moitié parti.
+        var encoded = new List<byte[]>(parts.Count);
+        foreach (var part in parts)
+        {
+            var result = Encode(part, out var bytes);
+            if (result != SendResult.Sent)
+                return result;
+            encoded.Add(bytes);
+        }
+
+        for (var i = 0; i < encoded.Count; i++)
+            RunBytes(encoded[i], SplitInterval * i);
         return SendResult.Sent;
+    }
+
+    /// <summary>Le temps entre deux morceaux d'un message découpé : ils arrivent dans l'ordre, sans inonder le chat.</summary>
+    private static readonly TimeSpan SplitInterval = TimeSpan.FromMilliseconds(750);
+
+    /// <summary>Combien de messages partiront pour ce texte : 1 s'il tient, 0 s'il est trop long et ne peut pas être découpé.</summary>
+    public static int PartCount(string text)
+    {
+        var message = ChatText.Normalize(text);
+        if (ChatText.ByteLength(message) <= ChatText.MaxBytes)
+            return 1;
+        return MessageSplitter.Split(message, ChatText.MaxBytes)?.Count ?? 0;
     }
 
     /// <summary>La liste de l'autotraduction du jeu.</summary>
     internal AutoTranslateData AutoTranslate { get; } = new();
 
     /// <summary>
-    /// Les mots entre flèches vertes deviennent de vrais liens d'autotraduction. Un mot qu'on ne retrouve pas dans
-    /// la liste (modifié à la main) part comme du texte normal.
+    /// Le message encodé pour le jeu. Les mots entre flèches vertes deviennent de vrais liens d'autotraduction ; un mot
+    /// qu'on ne retrouve pas dans la liste (modifié à la main) part comme du texte normal.
     /// </summary>
-    private SendResult SendWithAutoTranslate(string message)
+    private SendResult Encode(string message, out byte[] encoded)
     {
+        encoded = Array.Empty<byte>();
         var bytes = new List<byte>();
         var plain = new System.Text.StringBuilder();
         foreach (var part in AutoTranslateText.Split(message))
@@ -399,7 +448,7 @@ public sealed unsafe class GameChat : IDisposable
         if (!IsAllowedByGame(plain.ToString()))
             return SendResult.InvalidCharacters;
 
-        RunBytes(bytes.ToArray());
+        encoded = bytes.ToArray();
         return SendResult.Sent;
     }
 
@@ -421,9 +470,9 @@ public sealed unsafe class GameChat : IDisposable
     internal static void Run(string text) => RunBytes(System.Text.Encoding.UTF8.GetBytes(text));
 
     /// <summary>Envoie un texte déjà encodé pour le jeu, liens d'autotraduction compris.</summary>
-    private static void RunBytes(byte[] bytes)
+    private static void RunBytes(byte[] bytes, TimeSpan delay = default)
     {
-        Plugin.Framework.RunOnTick(() =>
+        Plugin.Framework.RunOnTick(delay: delay, action: () =>
         {
             var module = UIModule.Instance();
             if (module == null)

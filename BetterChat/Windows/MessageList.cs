@@ -943,7 +943,7 @@ public sealed class MessageList
         }
     }
 
-    private static void DrawItemTooltip(uint itemId)
+    private void DrawItemTooltip(uint itemId)
     {
         var item = Plugin.DataManager.GetExcelSheet<Item>().GetRowOrDefault(itemId);
         if (item == null)
@@ -952,11 +952,13 @@ public sealed class MessageList
         using var tooltip = Tip.Begin();
 
         var hasLevel = item.Value.LevelItem.RowId > 1;
+        var iconBottom = 0f;
+        var start = ImGui.GetCursorPos();
         var icon = Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(item.Value.Icon));
         if (icon.TryGetWrap(out var wrap, out _) && wrap != null)
         {
             var iconSize = 40f * S;
-            var start = ImGui.GetCursorPos();
+            iconBottom = start.Y + iconSize;
             ImGui.Image(wrap.Handle, new Vector2(iconSize, iconSize));
 
             // Le dessin des lettres se centre sur l'image, pas la ligne entière : une ligne garde de la place
@@ -973,6 +975,42 @@ public sealed class MessageList
         if (hasLevel)
             Tip.Note($"Niveau d'objet {item.Value.LevelItem.RowId}");
         ImGui.EndGroup();
+
+        if (Cfg.MarketPrices)
+            DrawMarketPrices(itemId, start.X, iconBottom);
+    }
+
+    /// <summary>Sous l'objet : son prix le plus bas sur ce monde, puis sur tout le centre de données.</summary>
+    private void DrawMarketPrices(uint itemId, float left, float iconBottom)
+    {
+        var state = plugin.Market.Get(itemId, out var quote);
+        if (state == MarketState.None)
+            return;
+
+        // Sous l'image de l'objet, qui descend parfois plus bas que son nom.
+        var y = MathF.Max(ImGui.GetCursorPosY(), iconBottom + Tip.Spacing.Y);
+        ImGui.SetCursorPos(new Vector2(left, y));
+        Tip.Gap();
+
+        if (quote == null)
+        {
+            Tip.Note(state == MarketState.Failed ? "Prix du marché indisponibles" : "Prix du marché : chargement...");
+            return;
+        }
+
+        var gold = new Vector4(0.95f, 0.80f, 0.40f, 1f);
+        var worldPrice = quote.WorldNq > 0 ? MarketPrices.Gils(quote.WorldNq) : quote.WorldHq > 0 ? MarketPrices.Gils(quote.WorldHq) + " (HQ)" : "aucune offre";
+        var worldDetail = quote.WorldNq > 0 && quote.WorldHq > 0 ? $"HQ {MarketPrices.Gils(quote.WorldHq)}" : null;
+        Tip.Line(FontAwesomeIcon.Coins, gold, $"{quote.World} : {worldPrice}", worldDetail);
+
+        if (quote.DataCenter.Length > 0)
+        {
+            var dcPrice = quote.DataCenterPrice > 0
+                ? MarketPrices.Gils(quote.DataCenterPrice) + (quote.DataCenterHq ? " (HQ)" : string.Empty)
+                : "aucune offre";
+            var dcDetail = quote.DataCenterPrice > 0 && quote.DataCenterWorld.Length > 0 ? $"sur {quote.DataCenterWorld}" : null;
+            Tip.Line(FontAwesomeIcon.Globe, Tip.Dim, $"{quote.DataCenter} : {dcPrice}", dcDetail);
+        }
     }
 
     private static void DrawQuestTooltip(uint questId)
@@ -1046,6 +1084,12 @@ public sealed class MessageList
                 {
                     Tip.MenuTitle(line.Author!.TellTarget);
                     Tip.MenuSeparator();
+                }
+
+                if (plugin.Game.CanReply(line) && Tip.MenuItem("Répondre", FontAwesomeIcon.Reply))
+                {
+                    plugin.Game.Reply(line);
+                    Input?.FocusInput();
                 }
 
                 if (HasSelection && Tip.MenuItem("Copier la sélection", FontAwesomeIcon.Clipboard))
