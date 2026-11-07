@@ -1320,7 +1320,7 @@ public sealed class MessageList
     /// <summary>
     /// Bouton flottant pour revenir au bas de la liste, avec le nombre de messages arrivés entre-temps.
     /// Il a la forme des infobulles (fond, coins, bordure, marges). Il remonte en apparaissant, et sa flèche passe au
-    /// bleu quand il y a du nouveau, comme les non-lus des onglets.
+    /// bleu quand il y a du nouveau (flèche, texte et bordure), comme les non-lus des onglets.
     /// </summary>
     private void DrawJumpToBottom(Vector2 size)
     {
@@ -1377,7 +1377,9 @@ public sealed class MessageList
             var lift = held ? 0.08f : hovered ? 0.04f : 0f;
             var fill = Tip.Background with { X = Tip.Background.X + lift, Y = Tip.Background.Y + lift, Z = Tip.Background.Z + lift };
             drawList.AddRectFilled(min, max, Col(fill), rounding);
-            drawList.AddRect(min, max, Col(hovered ? Tip.Border with { W = 0.8f } : Tip.Border), rounding);
+            // Du nouveau : la bordure et le texte passent au bleu de la flèche.
+            var border = hasNews ? news with { W = hovered ? 0.9f : 0.6f } : hovered ? Tip.Border with { W = 0.8f } : Tip.Border;
+            drawList.AddRect(min, max, Col(border), rounding);
 
             var arrowLeft = min.X + paddingX;
             var textPos = new Vector2(arrowLeft + arrowWidth + gap - textInkLeft, MathF.Round(min.Y + paddingY - cellTop));
@@ -1388,7 +1390,7 @@ public sealed class MessageList
             var arrowTop = MathF.Ceiling(cellCenter - arrowHeight / 2f);
             DrawDownArrow(drawList, arrowLeft, arrowTop, arrowWidth, arrowHeight, hasNews ? news : hovered ? TextMain : TextDim);
 
-            drawList.AddText(textPos, Col(hasNews || hovered ? TextMain : new Vector4(0.82f, 0.84f, 0.89f, 1f)), label);
+            drawList.AddText(textPos, Col(hasNews ? news : hovered ? TextMain : new Vector4(0.82f, 0.84f, 0.89f, 1f)), label);
         }
 
         if (clicked)
