@@ -921,10 +921,12 @@ public sealed class MessageList
             ImGui.Image(wrap.Handle, new Vector2(iconSize, iconSize));
             ImGui.SameLine();
 
-            // Le texte se centre sur la hauteur de l'image.
-            var lines = hasLevel ? 2 : 1;
-            var textH = lines * ImGui.GetTextLineHeight() + (lines - 1) * Tip.Spacing.Y;
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + MathF.Round((iconSize - textH) / 2f));
+            // Le dessin des lettres se centre sur l'image, pas la ligne entière : une ligne garde de la place
+            // sous les lettres (pour p, q, g...), et un nom seul paraissait sinon trop haut.
+            var (inkTop, inkBottom) = DigitInk();
+            var extraLines = hasLevel ? ImGui.GetTextLineHeight() + Tip.Spacing.Y : 0f;
+            var inkCenter = (inkTop + inkBottom + extraLines) / 2f;
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + MathF.Round(iconSize / 2f - inkCenter));
         }
 
         ImGui.BeginGroup();
