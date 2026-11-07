@@ -798,7 +798,7 @@ public sealed class ChatInputBar
             return;
 
         var min = ImGui.GetItemRectMin();
-        var lineH = ImGui.GetTextLineHeight() + Tip.Spacing.Y; // espacement de l'infobulle stylée
+        var lineH = Tip.TextLineHeight + Tip.Spacing.Y; // police et espacement de l'infobulle stylée
         var height = lineH * (suggestions.Count + 1) + Tip.Padding.Y * 2f;
         ImGui.SetNextWindowPos(new Vector2(min.X, min.Y - height - 6f * S));
 

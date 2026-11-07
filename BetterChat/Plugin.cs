@@ -203,6 +203,7 @@ public sealed class Plugin : IDalamudPlugin
         WindowSystem.RemoveAllWindows();
         chatWindow.Dispose();
         configWindow.Dispose();
+        BetterChat.Windows.Tip.Dispose();
 
         History.Flush();
     }
