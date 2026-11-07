@@ -221,7 +221,10 @@ public sealed class ChatInputBar
         return MathF.Round(autoTranslateShown);
     }
 
-    /// <summary>La barre sort de derrière la saisie en glissant vers le haut, et les messages remontent pour lui faire place.</summary>
+    /// <summary>
+    /// La barre sort de derrière la saisie en glissant vers le haut, puis les mots trouvés apparaissent au-dessus
+    /// d'elle. Les messages remontent pour leur faire place.
+    /// </summary>
     public void DrawAutoTranslateBar(Vector2 size, float bottom, float shown, float barHeight)
     {
         if (shown <= 0f)
@@ -234,8 +237,9 @@ public sealed class ChatInputBar
         ImGui.PushClipRect(origin + new Vector2(0f, top), origin + new Vector2(size.X, bottom), true);
         using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(reveal, 0.001f) * ImGui.GetStyle().Alpha))
         {
-            DrawAutoTranslateField(size, top, barHeight, reveal);
-            DrawAutoTranslateResults(size, top + barHeight, bottom - top - barHeight);
+            var barTop = bottom - MathF.Min(shown, barHeight);
+            DrawAutoTranslateField(size, barTop, barHeight, reveal);
+            DrawAutoTranslateResults(size, barTop, barTop - top);
         }
         ImGui.PopClipRect();
     }
@@ -299,8 +303,9 @@ public sealed class ChatInputBar
         autoTranslateSelected = 0;
     }
 
-    /// <param name="room">Hauteur déjà sortie sous la barre : la liste ne déborde pas sur la saisie pendant l'animation.</param>
-    private void DrawAutoTranslateResults(Vector2 size, float top, float room)
+    /// <param name="bottom">Le haut de la barre : la liste se pose dessus.</param>
+    /// <param name="room">Hauteur déjà sortie au-dessus de la barre : la liste ne déborde pas pendant l'animation.</param>
+    private void DrawAutoTranslateResults(Vector2 size, float bottom, float room)
     {
         var rows = AutoTranslateVisibleRows;
         if (rows == 0)
@@ -313,15 +318,16 @@ public sealed class ChatInputBar
 
         if (autoTranslateResults.Count == 0)
         {
-            ImGui.SetCursorPos(new Vector2(margin + 6f * S, MathF.Round(top + (rowH - lineH) / 2f)));
+            ImGui.SetCursorPos(new Vector2(margin + 6f * S, MathF.Round(bottom - rowH + (rowH - lineH) / 2f)));
             ImGui.TextColored(TextDim, "Aucun mot trouvé.");
             return;
         }
 
-        ImGui.SetCursorPos(new Vector2(margin, top));
         var listH = MathF.Min(rows * rowH, MathF.Floor(room));
         if (listH < 1f)
             return;
+
+        ImGui.SetCursorPos(new Vector2(margin, bottom - listH));
 
         using var list = ImRaii.Child("##autoTranslateList", new Vector2(width, listH), false);
         if (!list.Success)
