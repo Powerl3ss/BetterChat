@@ -41,7 +41,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Les flèches rappellent tes derniers messages, sans perdre ce que tu étais en train d'écrire.
 - En tapant `/`, les commandes du jeu et des plugins sont proposées et se complètent avec Tab.
 - Un aperçu montre ce que donneront `<t>`, `<flag>` et les autres raccourcis du jeu avant l'envoi.
-- Un clic sur un nom : message privé, inviter dans le groupe, examiner, plaque d'aventurier, ajouter en ami, copier, choisir sa couleur, masquer ses messages. Les derniers correspondants restent dans le menu des canaux.
+- Un clic sur un nom : message privé, inviter dans le groupe, examiner, plaque d'aventurier, ajouter en ami, copier, changer la couleur, masquer les messages. Les derniers correspondants restent dans le menu des canaux.
 
 **Être prévenu**
 - Ton nom et les mots que tu choisis surlignent le message, avec un son si tu veux.

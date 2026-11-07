@@ -566,7 +566,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         ImGui.SameLine();
         if (FancyButton("##resetTabs", "Onglets par défaut", FontAwesomeIcon.Undo, ButtonSize("Onglets par défaut", FontAwesomeIcon.Undo), primary: false, danger: true))
         {
-            AskConfirm("Remplacer tous mes onglets", FontAwesomeIcon.Undo, () =>
+            AskConfirm("Remplacer tous les onglets", FontAwesomeIcon.Undo, () =>
             {
                 Cfg.Tabs = ChatTabPresets.Default();
                 Cfg.ActiveTab = 0;

@@ -1184,7 +1184,7 @@ public sealed class MessageList
                 PlayerActions.Invite(player);
             if (PlayerActions.CanExamine(player) && Tip.MenuItem("Examiner", FontAwesomeIcon.Search))
                 PlayerActions.Examine(player);
-            if (PlayerActions.CanOpenPlate(player) && Tip.MenuItem("Voir sa plaque d'aventurier", FontAwesomeIcon.IdCard))
+            if (PlayerActions.CanOpenPlate(player) && Tip.MenuItem("Voir la plaque d'aventurier", FontAwesomeIcon.IdCard))
                 PlayerActions.OpenPlate(player);
             if (plugin.Players.CanAddFriend(player) && Tip.MenuItem("Ajouter en ami", FontAwesomeIcon.UserFriends))
                 plugin.Players.AddFriend(player);
@@ -1193,13 +1193,13 @@ public sealed class MessageList
         if (Tip.MenuItem("Copier le nom", FontAwesomeIcon.Copy))
             ImGui.SetClipboardText(player.TellTarget);
 
-        if (Tip.MenuItem("Choisir sa couleur", FontAwesomeIcon.Palette))
+        if (Tip.MenuItem("Changer la couleur", FontAwesomeIcon.Palette))
         {
             colorPlayer = player.Text;
             openPlayerColor = true;
         }
 
-        if (player.Text != plugin.LocalName && Tip.MenuItem("Masquer ses messages", FontAwesomeIcon.CommentSlash, danger: true))
+        if (player.Text != plugin.LocalName && Tip.MenuItem("Masquer les messages", FontAwesomeIcon.CommentSlash, danger: true))
             plugin.MutePlayer(player.Text);
     }
 
