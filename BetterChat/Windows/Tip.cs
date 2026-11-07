@@ -244,13 +244,16 @@ public static class Tip
         var glyph = icon.ToIconString();
 
         // Colonne fixe : le dessin de chaque icône part du bord gauche, comme les titres, et tous les textes s'alignent.
+        // En hauteur, le dessin se centre sur celui des majuscules du texte.
+        var textMiddle = start.Y + CapMiddle();
         ImGui.Dummy(new Vector2(MarkColumn, lineH));
         using (ImRaii.PushFont(UiBuilder.IconFont))
         {
             var size = ImGui.CalcTextSize(glyph);
-            var scale = Math.Min(1f, lineH * 0.9f / Math.Max(size.Y, 1f));
-            var pos = start + new Vector2(-GlyphLeft(glyph[0], scale), (lineH - size.Y * scale) / 2f);
-            ImGui.GetWindowDrawList().AddText(ImGui.GetFont(), ImGui.GetFontSize() * scale, pos, ImGui.GetColorU32(iconColor), glyph);
+            var drawSize = ImGui.GetFontSize() * Math.Min(1f, lineH * 0.9f / Math.Max(size.Y, 1f));
+            var (inkMin, inkMax) = GlyphInk(glyph[0], drawSize);
+            var pos = new Vector2(MathF.Round(start.X - inkMin.X), MathF.Round(textMiddle - (inkMin.Y + inkMax.Y) / 2f));
+            ImGui.GetWindowDrawList().AddText(ImGui.GetFont(), drawSize, pos, ImGui.GetColorU32(iconColor), glyph);
         }
 
         ImGui.SameLine(0, 6f * S);
@@ -283,12 +286,27 @@ public static class Tip
     // La colonne des icônes et des points : assez large pour la plus grande icône utilisée.
     private static float MarkColumn => ImGui.GetTextLineHeight() * 1.15f;
 
-    /// <summary>Le vide à gauche du dessin d'une icône : le retirer aligne vraiment son bord sur celui du texte.</summary>
-    private static unsafe float GlyphLeft(char c, float scale)
+    /// <summary>
+    /// Le dessin réel d'un caractère de la police active, écrit à la taille <paramref name="drawSize"/> : son coin haut
+    /// gauche et son coin bas droit, depuis la position d'écriture. Sans les marges de sa case, qui changent d'une
+    /// icône à l'autre : c'est ce dessin qu'on centre pour que toutes les icônes tombent au même endroit.
+    /// </summary>
+    private static unsafe (Vector2 Min, Vector2 Max) GlyphInk(char c, float drawSize)
     {
         var font = ImGui.GetFont();
         var found = font.FindGlyph(c);
-        return found != null && font.FontSize > 0f ? found->X0 * ImGui.GetFontSize() / font.FontSize * scale : 0f;
+        if (found == null || font.FontSize <= 0f)
+            return (Vector2.Zero, ImGui.CalcTextSize(c.ToString()) * drawSize / MathF.Max(ImGui.GetFontSize(), 1f));
+
+        var k = drawSize / font.FontSize;
+        return (new Vector2(found->X0, found->Y0) * k, new Vector2(found->X1, found->Y1) * k);
+    }
+
+    /// <summary>Milieu des majuscules de la police active, depuis le haut de la ligne : le centre visuel du texte.</summary>
+    private static float CapMiddle()
+    {
+        var (min, max) = GlyphInk('E', ImGui.GetFontSize());
+        return max.Y > min.Y ? (min.Y + max.Y) / 2f : ImGui.GetTextLineHeight() / 2f;
     }
 
     /// <summary>Petite étiquette arrondie (« Fait », « 2/3 », « En cours »...).</summary>
@@ -452,19 +470,23 @@ public static class Tip
 
         var lineH = ImGui.GetTextLineHeight();
         var centerY = min.Y + rowH / 2f;
+        var textPos = new Vector2(min.X + 30f * S, min.Y + MathF.Floor((rowH - lineH) / 2f));
+        var textMiddle = textPos.Y + CapMiddle();
 
-        // Icône dans une colonne fixe.
+        // Icône dans une colonne fixe : le centre de son dessin (et non de sa case) est le même pour toutes les icônes,
+        // à la hauteur du milieu des majuscules du texte.
         using (ImRaii.PushFont(UiBuilder.IconFont))
         {
             var glyph = icon.ToIconString();
-            var scale = 0.8f;
-            var size = ImGui.CalcTextSize(glyph) * scale;
+            var drawSize = ImGui.GetFontSize() * 0.8f;
+            var (inkMin, inkMax) = GlyphInk(glyph[0], drawSize);
             var iconColor = danger ? Bad : hovered || selected || toggled == true ? Accent : Dim;
-            dl.AddText(ImGui.GetFont(), ImGui.GetFontSize() * scale,
-                       new Vector2(min.X + 14f * S - size.X / 2f, centerY - size.Y / 2f), ImGui.GetColorU32(iconColor), glyph);
+            var pos = new Vector2(MathF.Round(min.X + 14f * S - (inkMin.X + inkMax.X) / 2f),
+                                  MathF.Round(textMiddle - (inkMin.Y + inkMax.Y) / 2f));
+            dl.AddText(ImGui.GetFont(), drawSize, pos, ImGui.GetColorU32(iconColor), glyph);
         }
 
-        dl.AddText(new Vector2(min.X + 30f * S, min.Y + MathF.Floor((rowH - lineH) / 2f)), ImGui.GetColorU32(main), label);
+        dl.AddText(textPos, ImGui.GetColorU32(main), label);
 
         var right = max.X - 10f * S;
         if (toggled is { } on)
@@ -484,10 +506,11 @@ public static class Tip
             using (ImRaii.PushFont(UiBuilder.IconFont))
             {
                 var glyph = FontAwesomeIcon.Check.ToIconString();
-                var scale = 0.8f;
-                var size = ImGui.CalcTextSize(glyph) * scale;
-                dl.AddText(ImGui.GetFont(), ImGui.GetFontSize() * scale,
-                           new Vector2(right - size.X, centerY - size.Y / 2f), ImGui.GetColorU32(Accent), glyph);
+                var drawSize = ImGui.GetFontSize() * 0.8f;
+                var (inkMin, inkMax) = GlyphInk(glyph[0], drawSize);
+                dl.AddText(ImGui.GetFont(), drawSize,
+                           new Vector2(MathF.Round(right - inkMax.X), MathF.Round(textMiddle - (inkMin.Y + inkMax.Y) / 2f)),
+                           ImGui.GetColorU32(Accent), glyph);
             }
         }
         else if (shortcut is { Length: > 0 })
