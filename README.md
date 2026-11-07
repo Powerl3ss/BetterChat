@@ -31,6 +31,7 @@ Si tu utilises Chat 2, désactive-le : les deux plugins se disputeraient la touc
 - Anti-spam : masque les messages selon des mots ou des expressions, et regroupe les messages répétés en « x3 ».
 - Export d'une conversation dans un fichier texte (clic droit sur l'onglet).
 - Les icônes du jeu dans les messages, et la sélection de texte à la souris (clic droit pour copier).
+- Des réglages rangés par thème, avec un aperçu du chat qui suit chaque changement d'affichage.
 - Tes messages sont retrouvés au prochain lancement (sur ton PC uniquement, un fichier par personnage, jamais le combat).
 
 **Écrire**

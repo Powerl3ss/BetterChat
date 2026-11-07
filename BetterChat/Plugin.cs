@@ -678,6 +678,9 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     /// <summary>Efface les messages affichés et ceux du disque pour ce personnage.</summary>
+    /// <summary>La police du chat, à la taille choisie dans les réglages (null le temps qu'elle se construise).</summary>
+    internal Dalamud.Interface.ManagedFontAtlas.IFontHandle? ChatFont() => chatWindow.ChatFont();
+
     public void ClearMessages()
     {
         History.Delete();

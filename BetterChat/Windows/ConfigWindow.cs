@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -18,15 +19,18 @@ namespace BetterChat.Windows;
 /// <summary>Fenêtre de réglages : en-tête, barre de navigation à gauche, pages, statut en bas.</summary>
 public sealed partial class ConfigWindow : Window, IDisposable
 {
-    private enum Page { Home, Tabs, Display, Alerts, About }
+    private enum Page { Home, Tabs, Context, Display, Alerts, Players, History, About }
 
-    private static readonly (Page Page, FontAwesomeIcon Icon, string Label)[] Pages =
+    private static readonly (Page Page, FontAwesomeIcon Icon)[] Pages =
     {
-        (Page.Home, FontAwesomeIcon.Home, "Accueil"),
-        (Page.Tabs, FontAwesomeIcon.Columns, "Onglets"),
-        (Page.Display, FontAwesomeIcon.Palette, "Affichage"),
-        (Page.Alerts, FontAwesomeIcon.Bell, "Messages et alertes"),
-        (Page.About, FontAwesomeIcon.InfoCircle, "À propos"),
+        (Page.Home, FontAwesomeIcon.Home),
+        (Page.Tabs, FontAwesomeIcon.Columns),
+        (Page.Context, FontAwesomeIcon.MapMarkedAlt),
+        (Page.Display, FontAwesomeIcon.Palette),
+        (Page.Alerts, FontAwesomeIcon.Bell),
+        (Page.Players, FontAwesomeIcon.Users),
+        (Page.History, FontAwesomeIcon.History),
+        (Page.About, FontAwesomeIcon.InfoCircle),
     };
 
     private const string RepoUrl = "https://github.com/Powerl3ss/BetterChat";
@@ -270,24 +274,20 @@ public sealed partial class ConfigWindow : Window, IDisposable
         var boxMin = new Vector2(ImGui.GetCursorScreenPos().X, (titleMin.Y + titleMax.Y) / 2f - box / 2f);
         ImGui.SetCursorScreenPos(boxMin);
         ImGui.Dummy(new Vector2(box, box));
-        if (ImGui.IsItemHovered())
-            Tip.Show(IsDaytime ? "Journée (8h00 - 20h00)" : "Soirée (20h00 - 8h00)");
         DrawIconCentered(dayIcon, boxMin, boxMin + new Vector2(box, box), IsDaytime ? SunColor : MoonColor);
         ImGui.SetWindowFontScale(1f);
 
         var buttonY = (headerH - FrameH) / 2f;
         ImGui.SetCursorPos(new Vector2(size.X - pad - FrameH, buttonY));
-        if (IconButton("##close", FontAwesomeIcon.Times, "Fermer"))
+        if (IconButton("##close", FontAwesomeIcon.Times))
             IsOpen = false;
 
         ImGui.SetCursorPos(new Vector2(size.X - pad - FrameH * 2 - 6f * S, buttonY));
-        if (IconButton("##fold", collapsed ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronUp,
-                       collapsed ? "Déplier les réglages (ou double-clic sur l'en-tête)" : "Replier les réglages (ou double-clic sur l'en-tête)"))
+        if (IconButton("##fold", collapsed ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronUp))
             ToggleWindowCollapsed();
 
         ImGui.SetCursorPos(new Vector2(size.X - pad - FrameH * 3 - 12f * S, buttonY));
-        if (IconButton("##chat", Cfg.ChatVisible ? FontAwesomeIcon.Eye : FontAwesomeIcon.EyeSlash,
-                       Cfg.ChatVisible ? "Revenir au chat du jeu" : "Afficher BetterChat"))
+        if (IconButton("##chat", Cfg.ChatVisible ? FontAwesomeIcon.Eye : FontAwesomeIcon.EyeSlash))
             plugin.ToggleChat();
 
         // Double-clic sur l'en-tête (hors boutons) : replie ou déplie la fenêtre.
@@ -319,7 +319,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
         for (var i = 0; i < Pages.Length; i++)
         {
-            var (target, icon, label) = Pages[i];
+            var (target, icon) = Pages[i];
             ImGui.SetCursorPos(new Vector2(x, headerH + 14f * S + i * (button + gap)));
             var min = ImGui.GetCursorScreenPos();
             var max = min + new Vector2(button, button);
@@ -332,8 +332,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 drawList.AddRectFilled(min, max, Col(HoverOverlay), 10f * S);
 
             DrawIconCentered(icon, min, max, active ? Accent : hovered ? TextMain : TextDim);
-            if (hovered)
-                Tip.Show(label);
         }
     }
 
@@ -410,12 +408,65 @@ public sealed partial class ConfigWindow : Window, IDisposable
         {
             case Page.Home: DrawHomePage(); break;
             case Page.Tabs: DrawTabsPage(); break;
+            case Page.Context: DrawContextPage(); break;
             case Page.Display: DrawDisplayPage(); break;
             case Page.Alerts: DrawAlertsPage(); break;
+            case Page.Players: DrawPlayersPage(); break;
+            case Page.History: DrawHistoryPage(); break;
             case Page.About: DrawAboutPage(); break;
         }
         ImGui.EndGroup();
         ImGui.Dummy(new Vector2(0, pad));
+        DrawConfirmPopup();
+    }
+
+
+    // =================================================================== Confirmation
+
+    // Les actions qui effacent quelque chose passent par un petit menu : un clic de plus, mais jamais par erreur.
+    private string confirmLabel = string.Empty;
+    private FontAwesomeIcon confirmIcon;
+    private Action? confirmAction;
+
+    private void AskConfirm(string label, FontAwesomeIcon icon, Action action)
+    {
+        confirmLabel = label;
+        confirmIcon = icon;
+        confirmAction = action;
+        ImGui.OpenPopup("##confirm");
+    }
+
+    private void DrawConfirmPopup()
+    {
+        if (!Tip.BeginMenu("##confirm"))
+            return;
+
+        if (Tip.MenuItem(confirmLabel, confirmIcon, danger: true))
+        {
+            confirmAction?.Invoke();
+            confirmAction = null;
+        }
+
+        if (Tip.MenuItem("Annuler", FontAwesomeIcon.Times))
+            confirmAction = null;
+
+        Tip.EndMenu();
+    }
+
+    /// <summary>En bas d'une page : remet ses réglages d'origine, après confirmation.</summary>
+    private void ResetPageButton(string id, Action reset)
+    {
+        ImGui.Dummy(new Vector2(0, 4f * S));
+        const string label = "Réinitialiser cette page";
+        if (FancyButton(id, label, FontAwesomeIcon.Undo, ButtonSize(label, FontAwesomeIcon.Undo), primary: false, danger: true))
+        {
+            AskConfirm("Remettre les réglages d'origine", FontAwesomeIcon.Undo, () =>
+            {
+                reset();
+                plugin.Colors.Invalidate();
+                SaveSoon();
+            });
+        }
     }
 
     // =================================================================== Accueil
@@ -450,7 +501,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     plugin.ToggleChat();
             });
             changed |= ToggleRow("Masquer le chat du jeu", "Désactivé, les deux chats sont affichés côte à côte.", Cfg.HideNativeChat, v => Cfg.HideNativeChat = v);
-            changed |= ToggleRow("Verrouiller la fenêtre", "Empêche de la déplacer ou de la redimensionner par erreur.", Cfg.Locked, v => Cfg.Locked = v);
             var style = (int)Cfg.Style;
             SettingRow("Présentation", "Moderne : le nom au-dessus des messages. Compacte : tout sur une ligne.", 280f * S, () =>
             {
@@ -470,11 +520,19 @@ public sealed partial class ConfigWindow : Window, IDisposable
         SectionTitle("Pour bien démarrer");
         Card(() =>
         {
-            TextDimmed("Entrée ouvre la saisie, Tab change de canal, les flèches rappellent tes derniers messages.");
-            TextDimmed("Tape « /p bonjour » ou clique sur la pastille à gauche de la saisie pour choisir où écrire.");
-            TextDimmed("Clique sur un nom, un objet ou une carte dans un message. Sélectionne du texte à la souris, puis clic droit pour le copier.");
+            TextDimmed("Entrée ouvre la saisie. Les flèches haut et bas rappellent tes derniers messages.");
+            TextDimmed("Pour changer de canal : clique sur la pastille à gauche de la saisie, tape « /p bonjour », ou appuie sur Tab quand la saisie est vide.");
+            TextDimmed("Autotraduction : clique sur son bouton à droite de la saisie, ou tape le début d'un mot puis Tab.");
+            TextDimmed("Clique sur un nom, un objet ou une carte dans un message. Sélectionne du texte à la souris, puis clic droit pour le copier. Le clic droit sur un message permet aussi de l'épingler en haut de l'onglet.");
+            TextDimmed("Les messages privés se rangent par personne : une pastille par conversation, au-dessus de l'onglet.");
             TextDimmed("La loupe cherche dans l'onglet affiché, par exemple : de:Jean canal:CL date:hier.");
-            TextDimmed("Clic droit sur un onglet : ses options, le détacher dans une fenêtre, l'exporter dans un fichier.");
+            TextDimmed("L'épingle en haut du chat verrouille la fenêtre. Clic droit sur un onglet : le détacher dans sa propre fenêtre, l'exporter dans un fichier.");
+        });
+
+        SectionTitle("Cette fenêtre");
+        Card(() =>
+        {
+            changed |= ToggleRow("Fond animé", "Halos lumineux et particules derrière les réglages.", Cfg.AnimatedSettingsBackground, v => Cfg.AnimatedSettingsBackground = v);
         });
 
         if (changed)
@@ -482,6 +540,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
     }
 
     // =================================================================== Onglets
+
+    private readonly HashSet<ChatSection> openSections = new();
 
     private void DrawTabsPage()
     {
@@ -504,93 +564,30 @@ public sealed partial class ConfigWindow : Window, IDisposable
         }
 
         ImGui.SameLine();
-        if (FancyButton("##resetTabs", "Onglets par défaut", FontAwesomeIcon.Undo, ButtonSize("Onglets par défaut", FontAwesomeIcon.Undo), primary: false, danger: true) &&
-            ImGui.GetIO().KeyCtrl)
+        if (FancyButton("##resetTabs", "Onglets par défaut", FontAwesomeIcon.Undo, ButtonSize("Onglets par défaut", FontAwesomeIcon.Undo), primary: false, danger: true))
         {
-            Cfg.Tabs = ChatTabPresets.Default();
-            Cfg.ActiveTab = 0;
-            editedTab = 0;
-            structureChanged = true;
+            AskConfirm("Remplacer tous mes onglets", FontAwesomeIcon.Undo, () =>
+            {
+                Cfg.Tabs = ChatTabPresets.Default();
+                Cfg.ActiveTab = 0;
+                editedTab = 0;
+                TabsStructureChanged();
+            });
         }
-        if (ImGui.IsItemHovered())
-            Tip.Show("Ctrl + clic : remplace tous tes onglets par ceux d'origine.");
 
         ImGui.Dummy(new Vector2(0, 4f * S));
 
         if (structureChanged)
-        {
-            SaveSoon();
-            plugin.RebuildFeeds();
-            editedTab = Math.Clamp(editedTab, 0, Cfg.Tabs.Count - 1);
-        }
+            TabsStructureChanged();
 
         DrawTabEditor(Cfg.Tabs[editedTab]);
-        DrawContextRules();
     }
 
-    /// <summary>Changer d'onglet ou masquer des canaux selon l'endroit : donjon, raid, ville.</summary>
-    private void DrawContextRules()
+    private void TabsStructureChanged()
     {
-        SectionTitle("Selon le contexte", $"Actuellement : {ChatContexts.Label(plugin.Context).ToLowerInvariant()}");
-        Card(() => TextDimmed("En entrant dans un donjon, un raid ou une ville, le chat peut changer d'onglet et masquer des canaux. En sortant, l'onglet d'avant revient et les canaux réapparaissent."));
-
-        foreach (var context in ChatContexts.Configurable)
-        {
-            var rule = Cfg.RuleFor(context)!;
-            Card(() =>
-            {
-                ImGui.TextColored(Cfg.AccentColor with { W = 1f }, ChatContexts.Label(context));
-
-                SettingRow("Onglet à afficher", null, 220f * S, () =>
-                {
-                    var current = Cfg.Tabs.Find(t => t.Id == rule.TabId && !t.Detached);
-                    ImGui.SetNextItemWidth(220f * S);
-                    using var combo = ImRaii.Combo($"##contextTab{context}", current?.Name ?? "Ne rien changer");
-                    if (!combo.Success)
-                        return;
-
-                    if (ImGui.Selectable("Ne rien changer", current == null))
-                    {
-                        rule.TabId = string.Empty;
-                        SaveSoon();
-                    }
-
-                    foreach (var tab in Cfg.Tabs.Where(t => !t.Detached))
-                    {
-                        if (ImGui.Selectable($"{tab.Name}##{tab.Id}", tab == current))
-                        {
-                            rule.TabId = tab.Id;
-                            SaveSoon();
-                        }
-                    }
-                });
-
-                ImGui.TextUnformatted("Masquer");
-                var column = cardInner / 2f;
-                var start = ImGui.GetCursorPosX();
-                var sections = Enum.GetValues<ChatSection>();
-                for (var i = 0; i < sections.Length; i++)
-                {
-                    if (i % 2 == 1)
-                    {
-                        ImGui.SameLine();
-                        ImGui.SetCursorPosX(start + column);
-                    }
-
-                    var section = sections[i];
-                    var hidden = rule.Hidden.Contains(section);
-                    if (ImGui.Checkbox($"{ChatKinds.SectionLabel(section)}##{context}{section}", ref hidden))
-                    {
-                        if (hidden)
-                            rule.Hidden.Add(section);
-                        else
-                            rule.Hidden.Remove(section);
-                        plugin.ContextRulesChanged();
-                        SaveSoon();
-                    }
-                }
-            });
-        }
+        SaveSoon();
+        plugin.RebuildFeeds();
+        editedTab = Math.Clamp(editedTab, 0, Cfg.Tabs.Count - 1);
     }
 
     private bool DrawTabRow(int index)
@@ -606,26 +603,30 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 editedTab = index;
         }, buttons, () =>
         {
-            if (IconButton($"##up{index}", FontAwesomeIcon.ChevronUp, "Monter", disabled: index == 0))
+            if (IconButton($"##up{index}", FontAwesomeIcon.ChevronUp, disabled: index == 0))
             {
                 Move(index, index - 1);
                 changed = true;
             }
 
             ImGui.SameLine(0, 4f * S);
-            if (IconButton($"##down{index}", FontAwesomeIcon.ChevronDown, "Descendre", disabled: index >= Cfg.Tabs.Count - 1))
+            if (IconButton($"##down{index}", FontAwesomeIcon.ChevronDown, disabled: index >= Cfg.Tabs.Count - 1))
             {
                 Move(index, index + 1);
                 changed = true;
             }
 
             ImGui.SameLine(0, 4f * S);
-            var canDelete = Cfg.Tabs.Count > 1;
-            if (IconButton($"##del{index}", FontAwesomeIcon.Trash, canDelete ? "Ctrl + clic : supprimer" : "Il faut garder au moins un onglet", disabled: !canDelete, hoverColor: Danger) &&
-                ImGui.GetIO().KeyCtrl)
+            if (IconButton($"##del{index}", FontAwesomeIcon.Trash, disabled: Cfg.Tabs.Count <= 1, hoverColor: Danger))
             {
-                Cfg.Tabs.RemoveAt(index);
-                changed = true;
+                AskConfirm($"Supprimer « {tab.Name} »", FontAwesomeIcon.Trash, () =>
+                {
+                    if (Cfg.Tabs.Count <= 1 || !Cfg.Tabs.Remove(tab))
+                        return;
+
+                    Cfg.ActiveTab = Math.Clamp(Cfg.ActiveTab, 0, Cfg.Tabs.Count - 1);
+                    TabsStructureChanged();
+                });
             }
         });
 
@@ -668,9 +669,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
             using (ImRaii.Disabled(!tab.Detached && !plugin.CanDetachTab))
                 ToggleRow("Dans sa propre fenêtre", "L'onglet sort du chat, pour le placer où tu veux : le combat dans un coin de l'écran, par exemple.", tab.Detached, v => plugin.SetDetached(tab, v));
 
-            if (tab.Detached)
-                changed |= ToggleRow("Verrouiller cette fenêtre", "Ni déplacement ni redimensionnement. Indépendant du verrou du chat.", tab.Locked, v => tab.Locked = v);
-
             SettingRow("Canal à l'ouverture", "En ouvrant cet onglet, ou en cliquant dans la saisie de sa fenêtre détachée, la saisie passe sur ce canal.", 220f * S, () =>
             {
                 ImGui.SetNextItemWidth(220f * S);
@@ -695,12 +693,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
             });
         });
 
+        SectionTitle("Messages affichés");
         foreach (var section in Enum.GetValues<ChatSection>())
         {
             var kinds = ChatKinds.All.Where(i => i.Section == section).ToList();
             var enabled = kinds.Count(k => tab.Kinds.Contains(k.Kind));
-            SectionTitle(ChatKinds.SectionLabel(section), $"{enabled} / {kinds.Count}");
-            Card(() =>
+            var open = openSections.Contains(section);
+
+            var nowOpen = FoldingCard($"##section{section}", ChatKinds.SectionLabel(section), $"{enabled} / {kinds.Count}", open, () =>
             {
                 if (ImGui.SmallButton($"Tout cocher##{section}"))
                 {
@@ -759,6 +759,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     }, FrameH + 20f * S);
                 }
             });
+
+            if (nowOpen != open)
+            {
+                if (nowOpen)
+                    openSections.Add(section);
+                else
+                    openSections.Remove(section);
+            }
         }
 
         if (filtersChanged)
@@ -767,11 +775,91 @@ public sealed partial class ConfigWindow : Window, IDisposable
             SaveSoon();
     }
 
+    // =================================================================== Selon le contexte
+
+    /// <summary>Changer d'onglet ou masquer des canaux selon l'endroit : donjon, raid, ville.</summary>
+    private void DrawContextPage()
+    {
+        Hero("Selon le contexte", "Change d'onglet et masque des canaux selon l'endroit.", "Actuellement", ChatContexts.Label(plugin.Context));
+        Card(() => TextDimmed("En entrant dans un donjon, un raid ou une ville, le chat peut changer d'onglet et masquer des canaux. En sortant, l'onglet d'avant revient et les canaux réapparaissent."));
+
+        foreach (var context in ChatContexts.Configurable)
+        {
+            var rule = Cfg.RuleFor(context)!;
+            SectionTitle(ChatContexts.Label(context), rule.TabId.Length == 0 && rule.Hidden.Count == 0 ? "Rien ne change" : null);
+            Card(() =>
+            {
+                SettingRow("Onglet à afficher", null, 220f * S, () =>
+                {
+                    var current = Cfg.Tabs.Find(t => t.Id == rule.TabId && !t.Detached);
+                    ImGui.SetNextItemWidth(220f * S);
+                    using var combo = ImRaii.Combo($"##contextTab{context}", current?.Name ?? "Ne rien changer");
+                    if (!combo.Success)
+                        return;
+
+                    if (ImGui.Selectable("Ne rien changer", current == null))
+                    {
+                        rule.TabId = string.Empty;
+                        SaveSoon();
+                    }
+
+                    foreach (var tab in Cfg.Tabs.Where(t => !t.Detached))
+                    {
+                        if (ImGui.Selectable($"{tab.Name}##{tab.Id}", tab == current))
+                        {
+                            rule.TabId = tab.Id;
+                            SaveSoon();
+                        }
+                    }
+                });
+
+                ImGui.TextUnformatted("Masquer");
+                var column = cardInner / 2f;
+                var start = ImGui.GetCursorPosX();
+                var sections = Enum.GetValues<ChatSection>();
+                for (var i = 0; i < sections.Length; i++)
+                {
+                    if (i % 2 == 1)
+                    {
+                        ImGui.SameLine();
+                        ImGui.SetCursorPosX(start + column);
+                    }
+
+                    var section = sections[i];
+                    var hidden = rule.Hidden.Contains(section);
+                    if (ImGui.Checkbox($"{ChatKinds.SectionLabel(section)}##{context}{section}", ref hidden))
+                    {
+                        if (hidden)
+                            rule.Hidden.Add(section);
+                        else
+                            rule.Hidden.Remove(section);
+                        plugin.ContextRulesChanged();
+                        SaveSoon();
+                    }
+                }
+            });
+        }
+
+        ResetPageButton("##resetContext", () =>
+        {
+            foreach (var context in ChatContexts.Configurable)
+            {
+                var rule = Cfg.RuleFor(context)!;
+                rule.TabId = string.Empty;
+                rule.Hidden.Clear();
+            }
+
+            plugin.ContextRulesChanged();
+        });
+    }
+
     // =================================================================== Affichage
 
     private void DrawDisplayPage()
     {
         Hero("Affichage", "Règle l'apparence de la fenêtre de chat.", Cfg.Style == ChatStyle.Modern ? "Présentation moderne" : "Présentation compacte");
+
+        DrawChatPreview();
 
         displaySection = Segmented("##display", new[]
         {
@@ -818,8 +906,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 {
                     CardLabel("Interface");
                     changed |= ColorRow("Couleur d'accent", "Onglet actif, mentions, réglages.", Cfg.AccentColor, v => Cfg.AccentColor = v);
-                    changed |= ColorRow("Texte secondaire", "L'heure des messages.", Cfg.SecondaryColor, v => Cfg.SecondaryColor = v);
-                    changed |= ToggleRow("Fond animé des réglages", "Halos lumineux et particules derrière cette fenêtre.", Cfg.AnimatedSettingsBackground, v => Cfg.AnimatedSettingsBackground = v);
+                    changed |= ColorRow("Texte secondaire", "L'heure des messages, les séparateurs de date, les compteurs (« x3 », messages épinglés) et la catégorie des autotraductions.", Cfg.SecondaryColor, v => Cfg.SecondaryColor = v);
                 });
 
                 Card(() =>
@@ -837,18 +924,30 @@ public sealed partial class ConfigWindow : Window, IDisposable
                         changed |= ColorRow(ChatKinds.Info(kind).Label, null, current, v => Cfg.ChannelColors[kind] = v);
                     }
                 });
-
-                if (FancyButton("##resetColors", "Couleurs par défaut", FontAwesomeIcon.Undo, ButtonSize("Couleurs par défaut", FontAwesomeIcon.Undo), primary: false))
-                {
-                    var defaults = new Configuration();
-                    Cfg.AccentColor = defaults.AccentColor;
-                    Cfg.SecondaryColor = defaults.SecondaryColor;
-                    Cfg.UseGameColors = defaults.UseGameColors;
-                    Cfg.ChannelColors.Clear();
-                    changed = true;
-                }
                 break;
         }
+
+        ResetPageButton("##resetDisplay", () =>
+        {
+            var d = new Configuration();
+            Cfg.ShowTimestamps = d.ShowTimestamps;
+            Cfg.ShowChannelTags = d.ShowChannelTags;
+            Cfg.TextOutline = d.TextOutline;
+            Cfg.OutlineStrength = d.OutlineStrength;
+            Cfg.FontSize = d.FontSize;
+            Cfg.MessageSpacing = d.MessageSpacing;
+            Cfg.ShowJobIcons = d.ShowJobIcons;
+            Cfg.JobIconHeight = d.JobIconHeight;
+            Cfg.ShowSeparators = d.ShowSeparators;
+            Cfg.KeepFocusAfterSend = d.KeepFocusAfterSend;
+            Cfg.CommandSuggestions = d.CommandSuggestions;
+            Cfg.ShowMacroPreview = d.ShowMacroPreview;
+            Cfg.WindowOpacity = d.WindowOpacity;
+            Cfg.AccentColor = d.AccentColor;
+            Cfg.SecondaryColor = d.SecondaryColor;
+            Cfg.UseGameColors = d.UseGameColors;
+            Cfg.ChannelColors.Clear();
+        });
 
         if (changed)
         {
@@ -857,11 +956,11 @@ public sealed partial class ConfigWindow : Window, IDisposable
         }
     }
 
-    // =================================================================== Messages et alertes
+    // =================================================================== Alertes
 
     private void DrawAlertsPage()
     {
-        Hero("Messages et alertes", "Ce qui attire ton attention, et ce qui est gardé.");
+        Hero("Alertes", "Ce qui attire ton attention.");
 
         var changed = false;
         var mentionsChanged = false;
@@ -874,32 +973,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
             ImGui.TextUnformatted("Mots à surveiller");
             TextDimmed("Le nom de ta compagnie, d'un raid... Seuls les mots entiers comptent.");
-
-            string? removed = null;
-            foreach (var word in Cfg.MentionWords)
-            {
-                Row(() => ImGui.TextUnformatted(word), FrameH, () =>
-                {
-                    if (IconButton($"##rmWord{word}", FontAwesomeIcon.Times, "Retirer", hoverColor: Danger))
-                        removed = word;
-                });
-            }
-
-            if (removed != null)
-            {
-                Cfg.MentionWords.Remove(removed);
+            if (WordList("Word", Cfg.MentionWords, ref newWord, "Ajouter un mot...", 40))
                 mentionsChanged = true;
-            }
-
-            ImGui.SetNextItemWidth(260f * S);
-            var entered = ImGui.InputTextWithHint("##newWord", "Ajouter un mot...", ref newWord, 40, ImGuiInputTextFlags.EnterReturnsTrue);
-            ImGui.SameLine();
-            if ((ImGui.Button("Ajouter") || entered) && newWord.Trim().Length > 0)
-            {
-                Cfg.MentionWords.Add(newWord.Trim());
-                newWord = string.Empty;
-                mentionsChanged = true;
-            }
         });
 
         SectionTitle("Sons");
@@ -908,53 +983,91 @@ public sealed partial class ConfigWindow : Window, IDisposable
             changed |= ToggleRow("Son à la réception d'un message privé", null, Cfg.SoundOnTell, v => Cfg.SoundOnTell = v);
             changed |= ToggleRow("Son quand on me cite", null, Cfg.SoundOnMention, v => Cfg.SoundOnMention = v);
             changed |= ToggleRow("Clignoter dans la barre des tâches", "À la réception d'un message privé, quand tu es sur une autre fenêtre.", Cfg.FlashOnTell, v => Cfg.FlashOnTell = v);
-            changed |= SliderIntRow("Son utilisé", "Les sons du jeu, de <se.1> à <se.16>.", Cfg.AlertSound, 1, 16, v => Cfg.AlertSound = v);
-            if (ImGui.Button("Écouter"))
-                GameChat.PlayAlert(Cfg.AlertSound);
-        });
 
-        SectionTitle("Anti-spam", plugin.SpamHidden > 0 ? $"{plugin.SpamHidden} masqué(s)" : null);
-        Card(() =>
-        {
-            if (ToggleRow("Regrouper les messages répétés", "Le même message du même joueur devient une seule ligne, avec « x3 ».", Cfg.CollapseRepeats, v => Cfg.CollapseRepeats = v))
+            var sliderW = 190f * S;
+            SettingRow("Son utilisé", "Les sons du jeu, de <se.1> à <se.16>.", sliderW + 4f * S + FrameH, () =>
             {
-                plugin.FiltersChanged();
-                changed = true;
-            }
-
-            ImGui.TextUnformatted("Masquer les messages qui contiennent");
-            TextDimmed("Un mot ou une expression : « gils pas chers », « wts »... Sans tenir compte des majuscules ni des accents.");
-
-            string? removed = null;
-            foreach (var word in Cfg.SpamWords)
-            {
-                Row(() => ImGui.TextUnformatted(word), FrameH, () =>
+                var sound = Cfg.AlertSound;
+                ImGui.SetNextItemWidth(sliderW);
+                if (ImGui.SliderInt("##alertSound", ref sound, 1, 16))
                 {
-                    if (IconButton($"##rmSpam{word}", FontAwesomeIcon.Times, "Retirer", hoverColor: Danger))
-                        removed = word;
-                });
-            }
+                    Cfg.AlertSound = sound;
+                    changed = true;
+                }
 
-            if (removed != null)
-            {
-                Cfg.SpamWords.Remove(removed);
-                plugin.SpamRulesChanged();
-                changed = true;
-            }
+                // Le son se fait entendre une fois le curseur relâché, puis d'un clic sur le haut-parleur.
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    GameChat.PlayAlert(Cfg.AlertSound);
 
-            ImGui.SetNextItemWidth(260f * S);
-            var entered = ImGui.InputTextWithHint("##newSpam", "Ajouter un mot ou une expression...", ref newSpamWord, 80, ImGuiInputTextFlags.EnterReturnsTrue);
-            ImGui.SameLine();
-            if ((ImGui.Button("Ajouter##spam") || entered) && newSpamWord.Trim().Length > 0)
-            {
-                Cfg.SpamWords.Add(newSpamWord.Trim());
-                newSpamWord = string.Empty;
-                plugin.SpamRulesChanged();
-                changed = true;
-            }
+                ImGui.SameLine(0, 4f * S);
+                if (IconButton("##playSound", FontAwesomeIcon.VolumeUp))
+                    GameChat.PlayAlert(Cfg.AlertSound);
+            });
         });
 
-        SectionTitle("Couleur par joueur", $"{Cfg.PlayerColors.Count}");
+        ResetPageButton("##resetAlerts", () =>
+        {
+            var d = new Configuration();
+            Cfg.MentionOwnName = d.MentionOwnName;
+            Cfg.SoundOnTell = d.SoundOnTell;
+            Cfg.SoundOnMention = d.SoundOnMention;
+            Cfg.FlashOnTell = d.FlashOnTell;
+            Cfg.AlertSound = d.AlertSound;
+            plugin.RefreshMentions();
+        });
+
+        if (mentionsChanged)
+        {
+            plugin.RefreshMentions();
+            changed = true;
+        }
+
+        if (changed)
+            SaveSoon();
+    }
+
+    /// <summary>Une liste de mots avec une croix pour en retirer un, puis un champ pour en ajouter. Renvoie vrai si elle a changé.</summary>
+    private bool WordList(string id, List<string> words, ref string draft, string hint, int maxLength)
+    {
+        var changed = false;
+        string? removed = null;
+        foreach (var word in words)
+        {
+            Row(() => ImGui.TextUnformatted(word), FrameH, () =>
+            {
+                if (IconButton($"##rm{id}{word}", FontAwesomeIcon.Times, hoverColor: Danger))
+                    removed = word;
+            });
+        }
+
+        if (removed != null)
+        {
+            words.Remove(removed);
+            changed = true;
+        }
+
+        ImGui.SetNextItemWidth(260f * S);
+        var entered = ImGui.InputTextWithHint($"##new{id}", hint, ref draft, maxLength, ImGuiInputTextFlags.EnterReturnsTrue);
+        ImGui.SameLine();
+        if ((ImGui.Button($"Ajouter##{id}") || entered) && draft.Trim().Length > 0)
+        {
+            words.Add(draft.Trim());
+            draft = string.Empty;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    // =================================================================== Joueurs
+
+    private void DrawPlayersPage()
+    {
+        Hero("Joueurs", "Repère certains joueurs, masque les autres.", $"{Cfg.PlayerColors.Count} en couleur", $"{Cfg.MutedPlayers.Count} masqué(s)");
+
+        var changed = false;
+
+        SectionTitle("Couleur par joueur");
         Card(() =>
         {
             TextDimmed("Pour repérer tes amis ou ton groupe statique. Clique aussi sur un nom dans le chat pour lui choisir une couleur.");
@@ -971,7 +1084,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                         changed = true;
 
                     ImGui.SameLine(0, 4f * S);
-                    if (IconButton($"##rmPlayerColor{name}", FontAwesomeIcon.Times, "Retirer", hoverColor: Danger))
+                    if (IconButton($"##rmPlayerColor{name}", FontAwesomeIcon.Times, hoverColor: Danger))
                         removed = name;
                 });
             }
@@ -989,7 +1102,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             }
         });
 
-        SectionTitle("Joueurs masqués", $"{Cfg.MutedPlayers.Count}");
+        SectionTitle("Joueurs masqués");
         Card(() =>
         {
             if (Cfg.MutedPlayers.Count == 0)
@@ -1003,13 +1116,43 @@ public sealed partial class ConfigWindow : Window, IDisposable
             {
                 Row(() => ImGui.TextUnformatted(name), FrameH, () =>
                 {
-                    if (IconButton($"##unmute{name}", FontAwesomeIcon.Times, "Afficher à nouveau ses messages"))
+                    if (IconButton($"##unmute{name}", FontAwesomeIcon.Times))
                         unmuted = name;
                 });
             }
 
             if (unmuted != null)
                 plugin.UnmutePlayer(unmuted);
+        });
+
+        if (changed)
+            SaveSoon();
+    }
+
+    // =================================================================== Anti-spam et historique
+
+    private void DrawHistoryPage()
+    {
+        Hero("Anti-spam et historique", "Ce qui est masqué, et ce qui est gardé.", plugin.SpamHidden > 0 ? $"{plugin.SpamHidden} message(s) masqué(s)" : null);
+
+        var changed = false;
+
+        SectionTitle("Anti-spam");
+        Card(() =>
+        {
+            if (ToggleRow("Regrouper les messages répétés", "Le même message du même joueur devient une seule ligne, avec « x3 ».", Cfg.CollapseRepeats, v => Cfg.CollapseRepeats = v))
+            {
+                plugin.FiltersChanged();
+                changed = true;
+            }
+
+            ImGui.TextUnformatted("Masquer les messages qui contiennent");
+            TextDimmed("Un mot ou une expression : « gils pas chers », « wts »... Sans tenir compte des majuscules ni des accents.");
+            if (WordList("Spam", Cfg.SpamWords, ref newSpamWord, "Ajouter un mot ou une expression...", 80))
+            {
+                plugin.SpamRulesChanged();
+                changed = true;
+            }
         });
 
         SectionTitle("Historique");
@@ -1024,18 +1167,21 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 plugin.Messages.Capacity = v;
             });
 
-            if (FancyButton("##clearHistory", "Effacer tous les messages", FontAwesomeIcon.Trash, ButtonSize("Effacer tous les messages", FontAwesomeIcon.Trash), primary: false, danger: true) &&
-                ImGui.GetIO().KeyCtrl)
-                plugin.ClearMessages();
-            if (ImGui.IsItemHovered())
-                Tip.Show("Ctrl + clic : efface l'affichage et le fichier de ce personnage.");
+            const string clear = "Effacer tous les messages";
+            if (FancyButton("##clearHistory", clear, FontAwesomeIcon.Trash, ButtonSize(clear, FontAwesomeIcon.Trash), primary: false, danger: true))
+                AskConfirm("Tout effacer, fichier compris", FontAwesomeIcon.Trash, plugin.ClearMessages);
         });
 
-        if (mentionsChanged)
+        ResetPageButton("##resetHistory", () =>
         {
-            plugin.RefreshMentions();
-            changed = true;
-        }
+            var d = new Configuration();
+            Cfg.CollapseRepeats = d.CollapseRepeats;
+            Cfg.KeepHistory = d.KeepHistory;
+            Cfg.HistoryLines = d.HistoryLines;
+            Cfg.MemoryLines = d.MemoryLines;
+            plugin.Messages.Capacity = d.MemoryLines;
+            plugin.FiltersChanged();
+        });
 
         if (changed)
             SaveSoon();

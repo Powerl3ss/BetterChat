@@ -97,6 +97,12 @@ public sealed class MessageList
         this.plugin = plugin;
     }
 
+    /// <summary>Faux : la liste ne fait que s'afficher (l'aperçu des réglages). Ni survol, ni clic, ni sélection.</summary>
+    public bool Interactive { get; init; } = true;
+
+    /// <summary>Hauteur de tous les messages à la dernière image, marges comprises.</summary>
+    internal float LastContentHeight { get; private set; }
+
     /// <summary>La saisie de la même fenêtre : un lien ou un message privé s'y prépare.</summary>
     public ChatInputBar? Input { get; set; }
 
@@ -131,6 +137,8 @@ public sealed class MessageList
             return;
         }
 
+        LastContentHeight = ContentHeight;
+
         // Toute la hauteur est réservée : la barre de défilement est juste, même sans tout dessiner.
         ImGui.Dummy(new Vector2(size.X - scrollbar, ContentHeight));
 
@@ -143,7 +151,7 @@ public sealed class MessageList
 
         // Le bouton « Revenir en bas » flotte au-dessus des messages : il reçoit seul les clics à cet endroit.
         var overJumpButton = !stickToBottom && jumpReveal > 0f && ImGui.IsMouseHoveringRect(jumpButtonMin, jumpButtonMax, false);
-        var hoverable = ImGui.IsWindowHovered() && !overJumpButton;
+        var hoverable = Interactive && ImGui.IsWindowHovered() && !overJumpButton;
         hoveredLinkLastFrame = hoveredLink;
         hoveredLink = null;
 

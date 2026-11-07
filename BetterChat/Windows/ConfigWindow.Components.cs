@@ -315,6 +315,65 @@ public sealed partial class ConfigWindow
         return changed;
     }
 
+    /// <summary>
+    /// Carte repliable : un clic sur sa ligne de titre l'ouvre ou la ferme. Le chevron tourne, le texte de droite
+    /// (un compteur, par exemple) reste visible fermé. Renvoie le nouvel état.
+    /// </summary>
+    private bool FoldingCard(string id, string title, string? right, bool open, Action content)
+    {
+        Card(() =>
+        {
+            var min = ImGui.GetCursorScreenPos();
+            var size = new Vector2(cardInner, FrameH);
+            if (ImGui.InvisibleButton(id, size))
+                open = !open;
+
+            var hovered = ImGui.IsItemHovered();
+            if (hovered)
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+
+            var drawList = ImGui.GetWindowDrawList();
+            var textY = MathF.Round(min.Y + (FrameH - ImGui.GetTextLineHeight()) / 2f);
+            drawList.AddText(new Vector2(min.X, textY), Col(hovered ? White : TextMain), title);
+
+            // Le chevron pointe vers la droite fermé, vers le bas ouvert.
+            var turn = Animate(ImGui.GetID(id + "turn"), open ? 1f : 0f, 20f);
+            var chevronMax = min + size;
+            var chevronMin = new Vector2(chevronMax.X - FrameH, min.Y);
+            DrawChevron(drawList, (chevronMin + chevronMax) / 2f, 4f * S, turn, hovered ? TextMain : TextDim);
+
+            if (right != null)
+            {
+                var rightW = TextWidth(right);
+                drawList.AddText(new Vector2(chevronMin.X - 4f * S - rightW, textY), Col(TextDim), right);
+            }
+
+            if (open)
+            {
+                ImGui.Dummy(new Vector2(0, 2f * S));
+                content();
+            }
+        });
+
+        return open;
+    }
+
+    /// <summary>Un chevron dessiné au trait, tourné de 0 (vers la droite) à 1 (vers le bas).</summary>
+    private static void DrawChevron(ImDrawListPtr drawList, Vector2 center, float half, float turn, Vector4 color)
+    {
+        var angle = turn * MathF.PI / 2f;
+        var cos = MathF.Cos(angle);
+        var sin = MathF.Sin(angle);
+        Vector2 Turn(Vector2 p) => center + new Vector2(p.X * cos - p.Y * sin, p.X * sin + p.Y * cos);
+
+        var a = Turn(new Vector2(-half / 2f, -half));
+        var b = Turn(new Vector2(half / 2f, 0f));
+        var c = Turn(new Vector2(-half / 2f, half));
+        var thickness = MathF.Max(1.5f * S, 1f);
+        drawList.AddLine(a, b, Col(color), thickness);
+        drawList.AddLine(b, c, Col(color), thickness);
+    }
+
     /// <summary>Petit titre de section, avec un texte optionnel aligné à droite.</summary>
     private void SectionTitle(string title, string? right = null)
     {
@@ -421,8 +480,7 @@ public sealed partial class ConfigWindow
     }
 
     /// <summary>Bouton icône sans fond (fond léger au survol).</summary>
-    private bool IconButton(string id, FontAwesomeIcon icon, string? tooltip = null, bool disabled = false,
-                            bool active = false, Vector4? hoverColor = null)
+    private bool IconButton(string id, FontAwesomeIcon icon, bool disabled = false, bool active = false, Vector4? hoverColor = null)
     {
         var size = new Vector2(FrameH, FrameH);
         var min = ImGui.GetCursorScreenPos();
@@ -440,9 +498,6 @@ public sealed partial class ConfigWindow
             : hovered ? hoverColor ?? TextMain
             : TextDim;
         DrawIconCentered(icon, min, min + size, color);
-
-        if (tooltip != null && ImGui.IsItemHovered())
-            Tip.Show(tooltip);
         return clicked;
     }
 
