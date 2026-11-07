@@ -1319,7 +1319,8 @@ public sealed class MessageList
 
     /// <summary>
     /// Bouton flottant pour revenir au bas de la liste, avec le nombre de messages arrivés entre-temps.
-    /// Il remonte en apparaissant, et passe au bleu quand il y a du nouveau, comme les non-lus des onglets.
+    /// Il a la forme des infobulles (fond, coins, bordure, marges). Il remonte en apparaissant, et sa flèche passe au
+    /// bleu quand il y a du nouveau, comme les non-lus des onglets.
     /// </summary>
     private void DrawJumpToBottom(Vector2 size)
     {
@@ -1332,14 +1333,14 @@ public sealed class MessageList
         var dt = Math.Clamp(ImGui.GetIO().DeltaTime, 0f, 0.1f);
         jumpReveal += (1f - jumpReveal) * (1f - MathF.Exp(-JumpRevealSpeed * dt));
 
-        // La police du jeu range ses lettres dans une case plus haute qu'elles, centrée sur leur dessin : la pilule
-        // se calcule autour de cette case, avec des marges entières, pour que le texte tombe au milieu.
+        // La police du jeu range ses lettres dans une case plus haute qu'elles, centrée sur leur dessin : le bouton
+        // se calcule autour de cette case, avec les marges des infobulles, pour que le texte tombe au milieu.
         var (cellTop, cellBottom) = DigitInk();
         var cellHeight = cellBottom - cellTop;
         var (textInkLeft, textInkRight) = TextInkBounds(label);
 
-        var paddingX = MathF.Round(12f * S);
-        var paddingY = MathF.Round(6f * S);
+        var paddingX = Tip.Padding.X;
+        var paddingY = Tip.Padding.Y;
         var gap = MathF.Round(6f * S);
 
         // La hauteur des chiffres dans cette police, mesurée en jeu : 9 pixels pour 16. Largeur paire : la tige, sur
@@ -1367,16 +1368,16 @@ public sealed class MessageList
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
 
         var news = new Vector4(0.55f, 0.76f, 1f, 1f);
-        var rounding = pillSize.Y / 2f;
+        var rounding = Tip.Rounding;
         var drawList = ImGui.GetWindowDrawList();
 
         using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, MathF.Max(jumpReveal, 0.001f) * ImGui.GetStyle().Alpha))
         {
-            var fill = held ? new Vector4(0.20f, 0.22f, 0.29f, 0.98f)
-                : hovered ? new Vector4(0.16f, 0.18f, 0.24f, 0.98f)
-                : new Vector4(0.10f, 0.11f, 0.15f, 0.96f);
+            // Le fond des infobulles, éclairci au survol et à l'appui pour sentir le bouton.
+            var lift = held ? 0.08f : hovered ? 0.04f : 0f;
+            var fill = Tip.Background with { X = Tip.Background.X + lift, Y = Tip.Background.Y + lift, Z = Tip.Background.Z + lift };
             drawList.AddRectFilled(min, max, Col(fill), rounding);
-            drawList.AddRect(min, max, Col(hasNews ? news with { W = 0.55f } : new Vector4(1f, 1f, 1f, hovered ? 0.22f : 0.12f)), rounding);
+            drawList.AddRect(min, max, Col(hovered ? Tip.Border with { W = 0.8f } : Tip.Border), rounding);
 
             var arrowLeft = min.X + paddingX;
             var textPos = new Vector2(arrowLeft + arrowWidth + gap - textInkLeft, MathF.Round(min.Y + paddingY - cellTop));

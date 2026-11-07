@@ -26,7 +26,8 @@ public static class Tip
     public static readonly Vector4 Good = new(0.45f, 0.86f, 0.56f, 1f);
     public static readonly Vector4 Warn = new(1.00f, 0.76f, 0.36f, 1f);
     public static readonly Vector4 Bad = new(1.00f, 0.45f, 0.45f, 1f);
-    private static readonly Vector4 Background = new(0.07f, 0.09f, 0.13f, 0.97f);
+    /// <summary>Fond des infobulles et des menus.</summary>
+    public static readonly Vector4 Background = new(0.07f, 0.09f, 0.13f, 0.97f);
 
     // Infobulles et menus compacts pour un rendu plus moderne. Le texte garde sa taille :
     // la police du jeu n'est nette qu'à ses tailles d'origine, la réduire la rendrait floue.
@@ -37,6 +38,12 @@ public static class Tip
 
     /// <summary>Espacement entre les lignes de l'infobulle (à l'échelle de l'interface).</summary>
     public static Vector2 Spacing => new(Px(5f), Px(4f));
+
+    /// <summary>Arrondi des coins des infobulles et des menus.</summary>
+    public static float Rounding => Px(6f);
+
+    /// <summary>Bordure des infobulles et des menus : la couleur d'accent, adoucie.</summary>
+    public static Vector4 Border => Accent with { W = 0.45f };
 
     private static float S => ImGuiHelpers.GlobalScale;
 
@@ -51,7 +58,7 @@ public static class Tip
     private static IDisposable Begin(float alpha)
     {
         var style = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Padding)
-                          .Push(ImGuiStyleVar.WindowRounding, Px(6f))
+                          .Push(ImGuiStyleVar.WindowRounding, Rounding)
                           .Push(ImGuiStyleVar.WindowBorderSize, 1f)
                           .Push(ImGuiStyleVar.ItemSpacing, Spacing)
                           .Push(ImGuiStyleVar.Alpha, alpha);
@@ -129,7 +136,7 @@ public static class Tip
     public static IDisposable PushPopupStyle()
     {
         var style = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(Px(5f), Px(5f)))
-                          .Push(ImGuiStyleVar.PopupRounding, Px(6f))
+                          .Push(ImGuiStyleVar.PopupRounding, Rounding)
                           .Push(ImGuiStyleVar.PopupBorderSize, 1f)
                           .Push(ImGuiStyleVar.ItemSpacing, new Vector2(Px(6f), Px(1f)));
         var colors = ImRaii.PushColor(ImGuiCol.PopupBg, Background)
