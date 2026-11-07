@@ -169,7 +169,7 @@ public sealed class ChatInputBar
 
         ImGui.SameLine(0, 4f * S);
         ImGui.SetCursorPosY(rowY);
-        if (chat.IconButton("##autoTranslateButton", FontAwesomeIcon.Language, rowH, "Autotraduction\nTab après un mot : le chercher dans la liste du jeu", autoTranslateOpen))
+        if (chat.IconButton("##autoTranslateButton", FontAwesomeIcon.Language, rowH, null, autoTranslateOpen))
             OpenAutoTranslate();
 
         DrawAutoTranslate();
