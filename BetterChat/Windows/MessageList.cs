@@ -909,6 +909,14 @@ public sealed class MessageList
             return;
         }
 
+        // Un lien de plugin n'a qu'une action : celle que le plugin a prévue.
+        if (link.Kind == LinkKind.Plugin)
+        {
+            if (left)
+                GameChat.ClickPluginLink(link);
+            return;
+        }
+
         if (left && link.Kind == LinkKind.Url)
         {
             pendingUrl = link;

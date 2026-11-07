@@ -16,6 +16,8 @@ public enum LinkKind : byte
     Quest = 5,
     Status = 6,
     PartyFinder = 7,
+    /// <summary>Un lien ajouté par un plugin (« Show Death Recap »...) : le plugin réagit lui-même au clic.</summary>
+    Plugin = 8,
 }
 
 /// <summary>Ce qui se passe au clic sur un morceau de texte. Une seule classe, simple à enregistrer sur le disque.</summary>
@@ -42,6 +44,9 @@ public sealed class ChatLink
     public uint Id { get; init; }
 
     public uint MapId { get; init; }
+
+    /// <summary>Lien de plugin : le texte du lien tel que le jeu l'a reçu, rendu au plugin quand on clique.</summary>
+    public byte[]? Data { get; init; }
     public int RawX { get; init; }
     public int RawY { get; init; }
 
@@ -53,6 +58,11 @@ public sealed class ChatLink
     public static ChatLink Quest(uint id) => new() { Kind = LinkKind.Quest, Id = id };
     public static ChatLink Status(uint id) => new() { Kind = LinkKind.Status, Id = id };
     public static ChatLink PartyFinder(uint listingId) => new() { Kind = LinkKind.PartyFinder, Id = listingId };
+
+    /// <param name="pluginName">Le plugin qui a créé le lien (gardé dans <see cref="Text"/>).</param>
+    /// <param name="commandId">Son numéro d'action (gardé dans <see cref="Id"/>).</param>
+    public static ChatLink PluginLink(string pluginName, uint commandId, byte[] data) =>
+        new() { Kind = LinkKind.Plugin, Text = pluginName, Id = commandId, Data = data };
 
     /// <summary>Destinataire de « /tell », avec le monde s'il est connu.</summary>
     [JsonIgnore]

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Dalamud.Game.Config;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -436,6 +437,28 @@ public sealed unsafe class GameChat : IDisposable
 
     /// <summary>Prépare le lien de cet objet : &lt;item&gt; dans un message l'affichera.</summary>
     /// <summary>Ouvre une annonce de recherche de groupe depuis son lien dans le chat.</summary>
+    /// <summary>
+    /// Un lien ajouté par un plugin : son action est rendue au plugin, comme si on avait cliqué dans le chat du jeu.
+    /// Faux si le plugin n'est plus chargé (un lien relu dans l'historique, par exemple).
+    /// </summary>
+    public static bool ClickPluginLink(ChatLink link)
+    {
+        if (!Plugin.ChatGui.RegisteredLinkHandlers.TryGetValue((link.Text, link.Id), out var handler))
+            return false;
+
+        try
+        {
+            var message = link.Data is { Length: > 0 } data ? SeString.Parse(data) : new SeString();
+            handler.Invoke(link.Id, message);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Le lien du plugin {Plugin} a échoué", link.Text);
+            return false;
+        }
+    }
+
     public static void OpenPartyFinder(uint listingId)
     {
         unsafe

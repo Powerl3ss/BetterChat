@@ -110,6 +110,11 @@ internal static class MessageConverter
                     link = ChatLink.PartyFinder(listing.ListingId);
                     break;
 
+                case DalamudLinkPayload pluginLink:
+                    Flush();
+                    link = ChatLink.PluginLink(pluginLink.Plugin, pluginLink.CommandId, LinkPayloads(text, pluginLink));
+                    break;
+
                 case RawPayload raw when raw.Equals(RawPayload.LinkTerminator):
                     Flush();
                     link = null;
@@ -131,6 +136,24 @@ internal static class MessageConverter
 
         Flush();
         return spans;
+    }
+
+    /// <summary>Le lien de plugin et ce qu'il entoure, jusqu'à sa fin : ce que le jeu lui aurait donné au clic.</summary>
+    private static byte[] LinkPayloads(SeString text, Payload start)
+    {
+        var payloads = text.Payloads;
+        var first = payloads.IndexOf(start);
+        var end = first < 0 ? -1 : payloads.FindIndex(first, p => p is RawPayload raw && raw.Equals(RawPayload.LinkTerminator));
+        var part = first < 0 ? new List<Payload> { start } : payloads.GetRange(first, (end < 0 ? payloads.Count : end + 1) - first);
+
+        try
+        {
+            return new SeString(part).Encode();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<byte>();
+        }
     }
 
     private static uint ColorOf(UIForegroundPayload payload)
