@@ -315,13 +315,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
             drawList.AddText(new Vector2(itemMin.X + itemH + 4f * S, textY), Col(active || hovered ? TextMain : TextDim), label);
         }
 
-        // En bas, l'action principale : afficher BetterChat ou revenir au chat du jeu.
-        var label2 = Cfg.ChatVisible ? "Revenir au chat du jeu" : "Afficher BetterChat";
-        var icon2 = Cfg.ChatVisible ? FontAwesomeIcon.EyeSlash : FontAwesomeIcon.Eye;
-        var buttonH = FrameH + 10f * S;
-        ImGui.SetCursorPos(new Vector2(x, max.Y - origin.Y - pad - buttonH));
-        if (FancyButton("##chatVisible", label2, icon2, new Vector2(width, buttonH), primary: Cfg.ChatVisible == false))
-            plugin.ToggleChat();
     }
 
     private void DrawLogo(float size)
@@ -467,6 +460,11 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 SectionTitle("L'essentiel", FontAwesomeIcon.Star);
                 RowCard(width, () =>
                 {
+                    changed |= ToggleRow("Afficher BetterChat", "Raccourci : /bchat. Masqué, le chat du jeu revient.", Cfg.ChatVisible, v =>
+                    {
+                        if (v != Cfg.ChatVisible)
+                            plugin.ToggleChat();
+                    });
                     changed |= ToggleRow("Masquer le chat du jeu", "Désactivé, les deux chats sont affichés côte à côte.", Cfg.HideNativeChat, v => Cfg.HideNativeChat = v);
                     changed |= ToggleRow("Fond animé des réglages", "Halos lumineux et particules derrière cette fenêtre.", Cfg.AnimatedSettingsBackground, v => Cfg.AnimatedSettingsBackground = v);
                     SettingRow("Présentation", "Moderne : le nom au-dessus des messages. Compacte : tout sur une ligne.", 0f, null);
