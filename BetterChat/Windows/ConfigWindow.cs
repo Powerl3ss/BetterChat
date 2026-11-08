@@ -439,8 +439,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
     {
         var replaced = Cfg.ChatVisible && Cfg.HideNativeChat && !plugin.OtherChatPluginLoaded;
         Hero(Greeting(),
-             replaced ? "Le chat du jeu est remplacé : Entrée ouvre la saisie, comme d'habitude." : "BetterChat est en retrait : le chat du jeu reste affiché.",
-             GameChat.ChannelLabel(plugin.Game.CurrentChannel));
+             replaced ? "Le chat du jeu est remplacé : Entrée ouvre la saisie, comme d'habitude." : "BetterChat est en retrait : le chat du jeu reste affiché.");
 
         if (plugin.OtherChatPluginLoaded)
         {
