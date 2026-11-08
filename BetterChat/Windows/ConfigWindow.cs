@@ -442,10 +442,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawHomePage()
     {
-        var replaced = Cfg.ChatVisible && Cfg.HideNativeChat && !plugin.OtherChatPluginLoaded;
-        Hero(Greeting(),
-             replaced ? "Le chat du jeu est remplacé : Entrée ouvre la saisie, comme d'habitude." : "BetterChat est en retrait : le chat du jeu reste affiché.");
-
         if (plugin.OtherChatPluginLoaded)
         {
             SectionTitle("Un autre plugin de chat est actif", FontAwesomeIcon.ExclamationTriangle);
@@ -503,18 +499,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
         if (changed)
             SaveSoon();
-    }
-
-    /// <summary>« Bonjour, Prénom » ou « Bonsoir, Prénom » selon l'heure du PC.</summary>
-    private string Greeting()
-    {
-        var hello = DateTime.Now.Hour is >= 5 and < 18 ? "Bonjour" : "Bonsoir";
-        var name = plugin.LocalName;
-        if (Plugin.CurrentCharacterId == 0 || string.IsNullOrWhiteSpace(name))
-            return $"{hello} !";
-
-        var first = name.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
-        return $"{hello}, {first}";
     }
 
     /// <summary>Une astuce : un point de la couleur d'accent, puis le texte.</summary>
@@ -701,8 +685,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawTabsPage()
     {
-        Hero("Onglets", "Choisis ce que chaque onglet affiche.", $"{Cfg.Tabs.Count} onglet(s)");
-
         editedTab = Math.Clamp(editedTab, 0, Cfg.Tabs.Count - 1);
         var structureChanged = false;
 
@@ -943,7 +925,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
     /// <summary>Changer d'onglet ou masquer des canaux selon l'endroit : donjon, raid, ville.</summary>
     private void DrawContextPage()
     {
-        Hero("Selon le contexte", "Change d'onglet et masque des canaux selon l'endroit.", $"Actuellement : {ChatContexts.Label(plugin.Context)}");
         SectionTitle("Comment ça marche", FontAwesomeIcon.Lightbulb);
         Card(() => TextDimmed("En entrant dans un donjon, un raid ou une ville, le chat peut changer d'onglet et masquer des canaux. En sortant, l'onglet d'avant revient et les canaux réapparaissent."));
 
@@ -1029,8 +1010,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawDisplayPage()
     {
-        Hero("Affichage", "Règle l'apparence de la fenêtre de chat.", Cfg.Style == ChatStyle.Modern ? "Présentation moderne" : "Présentation compacte");
-
         DrawChatPreview();
 
         displaySection = Segmented("##display", new[]
@@ -1165,8 +1144,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawAlertsPage()
     {
-        Hero("Alertes", "Ce qui attire ton attention.");
-
         var changed = false;
         var mentionsChanged = false;
 
@@ -1268,8 +1245,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawPlayersPage()
     {
-        Hero("Joueurs", "Repère certains joueurs, masque les autres.", $"{Cfg.PlayerColors.Count} en couleur", $"{Cfg.MutedPlayers.Count} masqué(s)");
-
         var changed = false;
 
         SectionTitle("Couleur par joueur", FontAwesomeIcon.Palette);
@@ -1338,8 +1313,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawHistoryPage()
     {
-        Hero("Anti-spam et historique", "Ce qui est masqué, et ce qui est gardé.", plugin.SpamHidden > 0 ? $"{plugin.SpamHidden} message(s) masqué(s)" : null);
-
         var changed = false;
 
         SectionTitle("Anti-spam", FontAwesomeIcon.ShieldAlt);
@@ -1397,8 +1370,6 @@ public sealed partial class ConfigWindow : Window, IDisposable
     private void DrawAboutPage()
     {
         var version = Plugin.PluginInterface.Manifest.AssemblyVersion.ToString();
-        Hero("À propos", "Un chat moderne à la place du chat du jeu.", $"Version {version}", "par Powerl3ss");
-
         Card(() =>
         {
             var start = ImGui.GetCursorPos();
@@ -1408,6 +1379,9 @@ public sealed partial class ConfigWindow : Window, IDisposable
             ImGui.SetCursorPosY(start.Y + 6f * S);
             using (heroFont.Push())
                 ImGui.TextUnformatted("BetterChat");
+            ImGui.SameLine(0, 10f * S);
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 2f * S);
+            Chip($"Version {version}");
             TextDimmed("Tes messages partent par le chat du jeu, sur le même canal, avec les mêmes commandes. Le plugin ne change que ce que tu vois, et n'envoie rien sans que tu appuies sur Entrée.");
             ImGui.EndGroup();
         });
