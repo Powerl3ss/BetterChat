@@ -230,10 +230,8 @@ public sealed partial class ConfigWindow
         drawList.AddRectFilled(start, max, Col(CardBg), PanelRounding);
         if (glow)
         {
-            drawList.PushClipRect(start, max, true);
             var size = max - start;
-            SoftCircle(drawList, max - new Vector2(size.X * 0.08f, 0f), MathF.Max(size.X, size.Y) * 0.75f, Accent, 0.16f);
-            drawList.PopClipRect();
+            RoundedGlow(drawList, start, max, PanelRounding, max - size * 0.12f, MathF.Max(size.X, size.Y) * 0.85f, Accent, 0.20f);
         }
 
         drawList.AddRect(start, max, Col(Line), PanelRounding);
@@ -245,6 +243,84 @@ public sealed partial class ConfigWindow
         ImGui.SetCursorPos(new Vector2(startLocal.X, bottomLocal));
         ImGui.Dummy(new Vector2(w, spacingAfter ? GapAfterPanel : 0f));
         return bottomLocal;
+    }
+
+    /// <summary>
+    /// Halo lumineux en dégradé lisse, qui ne sort jamais de la forme arrondie : un maillage qui épouse le contour du
+    /// rectangle arrondi, chaque sommet coloré selon sa distance au centre du halo. Le centre doit être dans le rectangle.
+    /// </summary>
+    private static void RoundedGlow(ImDrawListPtr drawList, Vector2 min, Vector2 max, float rounding, Vector2 center,
+                                    float radius, Vector4 color, float alpha)
+    {
+        const int pointsPerCorner = 10;
+        const int rings = 12;
+
+        // Le contour, dans le sens des aiguilles d'une montre : haut gauche, haut droit, bas droit, bas gauche.
+        rounding = MathF.Min(rounding, MathF.Min(max.X - min.X, max.Y - min.Y) / 2f);
+        var corners = new (Vector2 Center, float Start)[]
+        {
+            (new Vector2(min.X + rounding, min.Y + rounding), MathF.PI),
+            (new Vector2(max.X - rounding, min.Y + rounding), MathF.PI * 1.5f),
+            (new Vector2(max.X - rounding, max.Y - rounding), 0f),
+            (new Vector2(min.X + rounding, max.Y - rounding), MathF.PI * 0.5f),
+        };
+
+        var outline = new List<Vector2>(corners.Length * pointsPerCorner);
+        foreach (var (corner, startAngle) in corners)
+        {
+            for (var i = 0; i < pointsPerCorner; i++)
+            {
+                var angle = startAngle + MathF.PI / 2f * i / (pointsPerCorner - 1);
+                outline.Add(corner + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * rounding);
+            }
+        }
+
+        uint Shade(Vector2 point)
+        {
+            var x = Math.Clamp(1f - Vector2.Distance(point, center) / radius, 0f, 1f);
+            return Col(color with { W = alpha * x * x * (3f - 2f * x) });
+        }
+
+        var count = outline.Count;
+        var uv = ImGui.GetFontTexUvWhitePixel();
+        drawList.PrimReserve(count * 3 + count * (rings - 1) * 6, 1 + count * rings);
+        var first = drawList.VtxCurrentIdx;
+
+        drawList.PrimWriteVtx(center, uv, Shade(center));
+        for (var ring = 1; ring <= rings; ring++)
+        {
+            var t = ring / (float)rings;
+            foreach (var point in outline)
+            {
+                var position = center + (point - center) * t;
+                drawList.PrimWriteVtx(position, uv, Shade(position));
+            }
+        }
+
+        // Un éventail autour du centre, puis des anneaux de quadrilatères jusqu'au contour.
+        for (var i = 0; i < count; i++)
+        {
+            var next = (i + 1) % count;
+            drawList.PrimWriteIdx((ushort)first);
+            drawList.PrimWriteIdx((ushort)(first + 1 + i));
+            drawList.PrimWriteIdx((ushort)(first + 1 + next));
+        }
+
+        for (var ring = 1; ring < rings; ring++)
+        {
+            var inner = first + 1 + (ring - 1) * count;
+            var outer = inner + count;
+            for (var i = 0; i < count; i++)
+            {
+                var next = (i + 1) % count;
+                drawList.PrimWriteIdx((ushort)(inner + i));
+                drawList.PrimWriteIdx((ushort)(inner + next));
+                drawList.PrimWriteIdx((ushort)(outer + next));
+                drawList.PrimWriteIdx((ushort)(inner + i));
+                drawList.PrimWriteIdx((ushort)(outer + next));
+                drawList.PrimWriteIdx((ushort)(outer + i));
+            }
+        }
     }
 
     // Bas du dernier panneau dessiné, en position locale.

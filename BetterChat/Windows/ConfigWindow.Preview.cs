@@ -37,11 +37,9 @@ public sealed partial class ConfigWindow
             // Un décor coloré derrière, comme le jeu : l'opacité du fond et le contour se jugent dessus.
             // Un fond bleu crépuscule arrondi, réchauffé par un halo orangé et un halo vert.
             drawList.AddRectFilled(min, max, Col(new Vector4(0.24f, 0.33f, 0.47f, 1f)), 14f * S);
-            drawList.PushClipRect(min, max, true);
             var size = max - min;
-            SoftCircle(drawList, min + new Vector2(size.X * 0.82f, size.Y * 0.95f), size.X * 0.45f, new Vector4(0.85f, 0.55f, 0.30f, 1f), 0.30f);
-            SoftCircle(drawList, min + new Vector2(size.X * 0.15f, size.Y * 0.90f), size.X * 0.35f, new Vector4(0.35f, 0.55f, 0.40f, 1f), 0.25f);
-            drawList.PopClipRect();
+            RoundedGlow(drawList, min, max, 14f * S, min + new Vector2(size.X * 0.82f, size.Y * 0.92f), size.X * 0.45f, new Vector4(0.85f, 0.55f, 0.30f, 1f), 0.55f);
+            RoundedGlow(drawList, min, max, 14f * S, min + new Vector2(size.X * 0.15f, size.Y * 0.90f), size.X * 0.35f, new Vector4(0.35f, 0.55f, 0.40f, 1f), 0.45f);
 
             var chatMin = min + new Vector2(inset, inset);
             var chatMax = max - new Vector2(inset, inset);
