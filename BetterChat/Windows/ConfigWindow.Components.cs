@@ -14,8 +14,9 @@ public sealed partial class ConfigWindow
     // ------------------------------------------------------------------ Palette
 
     // Des gris neutres à peine violets, des panneaux plus clairs que le fond, et la couleur d'accent pour ce qui compte.
-    private static readonly Vector4 WindowBg = new(0.063f, 0.059f, 0.075f, 0.985f);
-    private static readonly Vector4 CardBg = new(0.110f, 0.106f, 0.129f, 0.97f);
+    // Le fond de la fenêtre laisse deviner le jeu derrière ; les panneaux posés dessus restent pleins.
+    private static readonly Vector4 WindowBg = new(0.063f, 0.059f, 0.075f, 0.80f);
+    private static readonly Vector4 CardBg = new(0.110f, 0.106f, 0.129f, 1f);
     private static readonly Vector4 CardBgHover = new(0.200f, 0.196f, 0.227f, 1f);
     private static readonly Vector4 InputBg = new(0.157f, 0.153f, 0.180f, 1f);
     private static readonly Vector4 InputBgHover = new(0.200f, 0.196f, 0.227f, 1f);
