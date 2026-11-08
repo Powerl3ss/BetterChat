@@ -378,8 +378,8 @@ public sealed partial class ConfigWindow
         drawList.AddCircleFilled((min + max) / 2f, size / 2f, Col(AccentPale), 32);
         using (ImRaii.PushFont(UiBuilder.IconFont))
         {
-            // L'icône un peu plus petite que la pastille, centrée sur son dessin.
-            ImGui.SetWindowFontScale(0.85f);
+            // L'icône à un peu moins de la moitié de la pastille, centrée sur son dessin.
+            ImGui.SetWindowFontScale(size * 0.45f / MathF.Max(ImGui.GetFontSize(), 1f));
             var (position, _) = PlaceIcon(icon, min, max);
             drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), position, Col(AccentInk), icon.ToIconString());
             ImGui.SetWindowFontScale(1f);
@@ -610,32 +610,77 @@ public sealed partial class ConfigWindow
     /// </summary>
     private void SectionTitle(string title, FontAwesomeIcon icon, string? right = null) => pendingHeader = (title, icon, right);
 
-    /// <summary>En-tête de page : grand titre, sous-titre, et quelques étiquettes à droite.</summary>
+    /// <summary>
+    /// En-tête de page, dans un panneau comme les autres : grande pastille avec l'icône de la page, grand titre,
+    /// sous-titre, et quelques étiquettes à droite.
+    /// </summary>
     private void Hero(string title, string subtitle, string? statTop = null, string? statBottom = null)
     {
-        var start = ImGui.GetCursorPos();
-
-        using (heroFont.Push())
-            ImGui.TextUnformatted(title);
-        ImGui.TextColored(TextDim, subtitle);
-        var end = ImGui.GetCursorPos();
-
-        // Les étiquettes s'alignent à droite, à la hauteur du titre.
-        var x = start.X + pageWidth;
-        foreach (var stat in new[] { statBottom, statTop })
+        Card(() =>
         {
-            if (stat == null)
-                continue;
+            var start = ImGui.GetCursorPos();
+            var badge = MathF.Round(46f * S);
+            var textX = start.X + badge + 14f * S;
 
-            var chip = ChipSize(stat);
-            x -= chip.X;
-            ImGui.SetCursorPos(new Vector2(x, start.Y + 2f * S));
-            Chip(stat);
-            x -= 8f * S;
+            // Les étiquettes à droite ; le sous-titre passe à la ligne avant elles.
+            var chips = new List<string>();
+            if (statTop != null)
+                chips.Add(statTop);
+            if (statBottom != null)
+                chips.Add(statBottom);
+            var chipsW = 0f;
+            foreach (var chip in chips)
+                chipsW += ChipSize(chip).X + 8f * S;
+
+            // Mesuré d'abord : le texte se centre sur la pastille quand il est moins haut qu'elle, et inversement.
+            var wrapWidth = MathF.Max(40f * S, cardInner - (textX - start.X) - chipsW - 8f * S);
+            float titleH;
+            using (heroFont.Push())
+                titleH = ImGui.GetTextLineHeight();
+            var subtitleH = ImGui.CalcTextSize(subtitle, false, wrapWidth).Y;
+            var textH = titleH + ImGui.GetStyle().ItemSpacing.Y + subtitleH;
+            var height = MathF.Max(badge, textH);
+
+            ImGui.SetCursorPos(new Vector2(textX, start.Y + MathF.Round((height - textH) / 2f)));
+            ImGui.BeginGroup();
+            using (heroFont.Push())
+                ImGui.TextUnformatted(title);
+            ImGui.PushTextWrapPos(textX + wrapWidth);
+            ImGui.TextColored(TextDim, subtitle);
+            ImGui.PopTextWrapPos();
+            ImGui.EndGroup();
+
+            ImGui.SetCursorPos(new Vector2(start.X, start.Y + MathF.Round((height - badge) / 2f)));
+            IconBadge(PageIcon(page), badge);
+
+            var x = start.X + cardInner;
+            for (var i = chips.Count - 1; i >= 0; i--)
+            {
+                var size = ChipSize(chips[i]);
+                x -= size.X;
+                ImGui.SetCursorPos(new Vector2(x, start.Y + MathF.Round((height - size.Y) / 2f)));
+                Chip(chips[i]);
+                x -= 8f * S;
+            }
+
+            ImGui.SetCursorPos(new Vector2(start.X, start.Y + height));
+            ImGui.Dummy(new Vector2(cardInner, 0f));
+        }, glow: true);
+    }
+
+    /// <summary>L'icône d'une page, celle de la barre latérale.</summary>
+    private static FontAwesomeIcon PageIcon(Page target)
+    {
+        foreach (var (_, items) in Navigation)
+        {
+            foreach (var (itemPage, icon, _) in items)
+            {
+                if (itemPage == target)
+                    return icon;
+            }
         }
 
-        ImGui.SetCursorPos(end);
-        ImGui.Dummy(new Vector2(pageWidth, 10f * S));
+        return FontAwesomeIcon.Cog;
     }
 
     // ------------------------------------------------------------------ Contrôles
