@@ -37,6 +37,7 @@ var tests = new (string Name, Action Run)[]
     ("Recherche : préfixe inconnu ou date illisible restent du texte", Tests.SearchUnknownPrefixIsText),
     ("Recherche : accents ignorés dans l'onglet", Tests.FeedSearchIgnoresAccents),
     ("Icône du nom : rôle de chaque job", Tests.RoleIcons),
+    ("Accueil : activité de la semaine", Tests.WeekActivity),
     ("Découpage : un message court reste entier", Tests.SplitShortMessage),
     ("Découpage : entre deux mots, sous la limite, canal gardé", Tests.SplitKeepsWordsAndChannel),
     ("Découpage : de préférence après une fin de phrase", Tests.SplitAtSentence),
@@ -1412,5 +1413,34 @@ internal static class Tests
         var message = Words(95) + " " + entry + " " + Words(30);
         var parts = MessageSplitter.Split(message, 400)!;
         Check(parts.Count(p => p.Contains(entry, StringComparison.Ordinal)) == 1, "le mot reste entier");
+    }
+
+    public static void WeekActivity()
+    {
+        var now = new DateTime(2026, 11, 8, 15, 0, 0, DateTimeKind.Local);
+        ChatLine Say(DateTime local, bool mention = false) => new()
+        {
+            Kind = ChatKind.Say,
+            TimeUtc = local.ToUniversalTime(),
+            Sender = { new ChatSpan("Jean") },
+            Mentioned = mention,
+        };
+
+        var lines = new List<ChatLine>
+        {
+            Say(now.AddMinutes(-5)), Say(now.AddMinutes(-4), mention: true), Say(now.AddHours(-1)),
+            Say(now.AddDays(-1)), Say(now.AddDays(-1).AddHours(-3)),
+            Say(now.AddDays(-9)), // trop ancien
+            new() { Kind = ChatKind.System, TimeUtc = now.ToUniversalTime() }, // pas un joueur
+        };
+
+        var activity = ChatActivity.Compute(lines, now);
+        Same(3, activity.Today, "aujourd'hui");
+        Same(2, activity.Yesterday, "hier");
+        Same(1, activity.MentionsToday, "mentions");
+        Same(3, activity.Grid[6, 7], "14h-16h aujourd'hui");
+        Same(4, activity.Level(6, 7), "la tranche la plus active");
+        Same(0, activity.Level(0, 0), "rien");
+        Check(activity.ChangeFromYesterday is > 49f and < 51f, "+50 %");
     }
 }

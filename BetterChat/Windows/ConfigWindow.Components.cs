@@ -13,17 +13,17 @@ public sealed partial class ConfigWindow
 {
     // ------------------------------------------------------------------ Palette
 
-    private static readonly Vector4 WindowBg = new(0.071f, 0.078f, 0.106f, 0.985f);
-    // Légèrement transparents pour laisser deviner le fond animé.
-    private static readonly Vector4 SidebarBg = new(0.055f, 0.060f, 0.082f, 0.62f);
-    private static readonly Vector4 CardBg = new(0.106f, 0.114f, 0.153f, 0.84f);
-    private static readonly Vector4 CardBgHover = new(0.135f, 0.145f, 0.190f, 1f);
-    private static readonly Vector4 InputBg = new(0.140f, 0.150f, 0.200f, 1f);
-    private static readonly Vector4 InputBgHover = new(0.170f, 0.180f, 0.240f, 1f);
-    private static readonly Vector4 Line = new(1f, 1f, 1f, 0.075f);
-    private static readonly Vector4 HoverOverlay = new(1f, 1f, 1f, 0.06f);
-    private static readonly Vector4 TextMain = new(0.93f, 0.94f, 0.97f, 1f);
-    private static readonly Vector4 TextDim = new(0.60f, 0.63f, 0.71f, 1f);
+    // Des gris neutres à peine violets, des panneaux plus clairs que le fond, et la couleur d'accent pour ce qui compte.
+    private static readonly Vector4 WindowBg = new(0.063f, 0.059f, 0.075f, 0.985f);
+    private static readonly Vector4 CardBg = new(0.110f, 0.106f, 0.129f, 0.97f);
+    private static readonly Vector4 CardBgHover = new(0.200f, 0.196f, 0.227f, 1f);
+    private static readonly Vector4 InputBg = new(0.157f, 0.153f, 0.180f, 1f);
+    private static readonly Vector4 InputBgHover = new(0.200f, 0.196f, 0.227f, 1f);
+    private static readonly Vector4 Line = new(1f, 1f, 1f, 0.055f);
+    private static readonly Vector4 HoverOverlay = new(1f, 1f, 1f, 0.05f);
+    private static readonly Vector4 TextMain = new(0.95f, 0.94f, 0.97f, 1f);
+    private static readonly Vector4 TextDim = new(0.56f, 0.55f, 0.61f, 1f);
+    private static readonly Vector4 TextFaint = new(0.42f, 0.41f, 0.47f, 1f);
     private static readonly Vector4 White = new(1f, 1f, 1f, 1f);
     private static readonly Vector4 Success = new(0.38f, 0.85f, 0.56f, 1f);
     private static readonly Vector4 Danger = new(1f, 0.47f, 0.47f, 1f);
@@ -32,9 +32,13 @@ public sealed partial class ConfigWindow
     private Vector4 AccentSoft => Cfg.AccentColor with { W = 0.20f };
     private Vector4 AccentBorder => Cfg.AccentColor with { W = 0.60f };
 
-    private static readonly Vector4 DarkInk = new(0.07f, 0.08f, 0.11f, 1f);
-    private static readonly Vector4 SunColor = new(1f, 0.80f, 0.35f, 1f);
-    private static readonly Vector4 MoonColor = new(0.78f, 0.84f, 1f, 1f);
+    /// <summary>Le fond clair des pastilles d'icône, dans le ton de l'accent.</summary>
+    private Vector4 AccentPale => Vector4.Lerp(Accent, White, 0.72f) with { W = 1f };
+
+    /// <summary>Une icône posée sur <see cref="AccentPale"/> : l'accent, assombri.</summary>
+    private Vector4 AccentInk => Vector4.Lerp(Accent, DarkInk, 0.55f) with { W = 1f };
+
+    private static readonly Vector4 DarkInk = new(0.07f, 0.06f, 0.10f, 1f);
 
     /// <summary>Couleur du texte posé sur la couleur d'accent : sombre si l'accent est clair (blanc...), blanc sinon.</summary>
     private Vector4 OnAccent
@@ -46,6 +50,11 @@ public sealed partial class ConfigWindow
             return luminance > 0.6f ? DarkInk : White;
         }
     }
+
+    // Arrondis : les panneaux sont très arrondis, les éléments à l'intérieur un peu moins.
+    private static float PanelRounding => 18f * S;
+    private static float PanelPadding => 18f * S;
+    private static float PanelGap => 12f * S;
 
     private static float S => ImGuiHelpers.GlobalScale;
     private static uint Col(Vector4 color) => ImGui.GetColorU32(color);
@@ -176,17 +185,26 @@ public sealed partial class ConfigWindow
 
     // ------------------------------------------------------------------ Mise en page
 
+    // En-tête du prochain panneau, posé par SectionTitle : une pastille d'icône, un titre, et à droite une étiquette.
+    private (string Title, FontAwesomeIcon Icon, string? Right)? pendingHeader;
+
+    // Hauteur naturelle (sans hauteur minimale) du dernier panneau dessiné : sert à aligner les panneaux d'une rangée.
+    private float lastCardNaturalHeight;
+
     /// <summary>
-    /// Carte arrondie : le contenu est dessiné d'abord (calque 1), puis le fond derrière (calque 0)
-    /// une fois la hauteur connue. Renvoie la position Y locale du bas de la carte.
+    /// Panneau arrondi : le contenu est dessiné d'abord (calque 1), puis le fond derrière (calque 0) une fois la
+    /// hauteur connue. Avec <paramref name="glow"/>, un halo de la couleur d'accent éclaire son coin bas droit.
+    /// Renvoie la position Y locale du bas du panneau.
     /// </summary>
-    private float Card(Action content, float? width = null, bool spacingAfter = true)
+    private float Card(Action content, float? width = null, bool spacingAfter = true, bool glow = false, float minHeight = 0f)
     {
-        var pad = 16f * S;
+        var pad = PanelPadding;
         var w = width ?? pageWidth;
         var drawList = ImGui.GetWindowDrawList();
         var startLocal = ImGui.GetCursorPos();
         var start = ImGui.GetCursorScreenPos();
+        var header = pendingHeader;
+        pendingHeader = null;
 
         var previousInner = cardInner;
         cardInner = w - pad * 2;
@@ -197,21 +215,149 @@ public sealed partial class ConfigWindow
         ImGui.SetCursorPos(startLocal + new Vector2(pad, pad));
         ImGui.BeginGroup();
         ImGui.PushTextWrapPos(startLocal.X + pad + cardInner);
+        if (header is { } h)
+            PanelHeader(h.Title, h.Icon, h.Right);
         content();
         ImGui.PopTextWrapPos();
         ImGui.EndGroup();
 
-        var bottom = ImGui.GetItemRectMax().Y + pad;
+        var natural = ImGui.GetItemRectMax().Y + pad;
+        lastCardNaturalHeight = natural - start.Y;
+        var bottom = MathF.Max(natural, start.Y + minHeight);
+        var max = new Vector2(start.X + w, bottom);
+
         drawList.ChannelsSetCurrent(0);
-        drawList.AddRectFilled(start, new Vector2(start.X + w, bottom), Col(CardBg), 12f * S);
-        drawList.AddRect(start, new Vector2(start.X + w, bottom), Col(Line), 12f * S);
+        drawList.AddRectFilled(start, max, Col(CardBg), PanelRounding);
+        if (glow)
+        {
+            drawList.PushClipRect(start, max, true);
+            var size = max - start;
+            SoftCircle(drawList, max - new Vector2(size.X * 0.08f, 0f), MathF.Max(size.X, size.Y) * 0.75f, Accent, 0.16f);
+            drawList.PopClipRect();
+        }
+
+        drawList.AddRect(start, max, Col(Line), PanelRounding);
         drawList.ChannelsMerge();
 
         cardInner = previousInner;
         var bottomLocal = startLocal.Y + (bottom - start.Y);
+        lastCardBottom = bottomLocal;
         ImGui.SetCursorPos(new Vector2(startLocal.X, bottomLocal));
-        ImGui.Dummy(new Vector2(w, spacingAfter ? 6f * S : 0f));
+        ImGui.Dummy(new Vector2(w, spacingAfter ? GapAfterPanel : 0f));
         return bottomLocal;
+    }
+
+    // Bas du dernier panneau dessiné, en position locale.
+    private float lastCardBottom;
+
+    /// <summary>L'espace sous un panneau : avec l'espacement d'ImGui, il égale l'écart entre deux panneaux côte à côte.</summary>
+    private static float GapAfterPanel => MathF.Max(0f, PanelGap - ImGui.GetStyle().ItemSpacing.Y);
+
+    // Hauteurs des rangées de panneaux, mesurées à l'image précédente.
+    private readonly Dictionary<string, float> rowHeights = new();
+
+    /// <summary>
+    /// Plusieurs panneaux côte à côte, de même largeur et de même hauteur (celle du plus haut).
+    /// <paramref name="draw"/> reçoit le numéro et la largeur du panneau, et doit dessiner un seul <see cref="Card"/>.
+    /// </summary>
+    private void CardRow(string id, int count, Action<int, float> draw)
+    {
+        var start = ImGui.GetCursorPos();
+        var width = MathF.Floor((pageWidth - PanelGap * (count - 1)) / count);
+        rowHeights.TryGetValue(id, out var height);
+        var tallest = 0f;
+        var bottom = start.Y;
+        var previousPage = pageWidth;
+
+        for (var i = 0; i < count; i++)
+        {
+            ImGui.SetCursorPos(new Vector2(start.X + i * (width + PanelGap), start.Y));
+            rowMinHeight = height;
+            draw(i, width);
+            tallest = MathF.Max(tallest, lastCardNaturalHeight);
+            bottom = MathF.Max(bottom, lastCardBottom);
+        }
+
+        rowMinHeight = 0f;
+        pageWidth = previousPage;
+        rowHeights[id] = tallest;
+        ImGui.SetCursorPos(new Vector2(start.X, bottom));
+        ImGui.Dummy(new Vector2(pageWidth, GapAfterPanel));
+    }
+
+    // Hauteur à donner aux panneaux de la rangée en cours (0 hors rangée).
+    private float rowMinHeight;
+
+    /// <summary>Un panneau dans une rangée : sa largeur, la hauteur commune, sans espace après.</summary>
+    private void RowCard(float width, Action content, bool glow = false) =>
+        Card(content, width, spacingAfter: false, glow: glow, minHeight: rowMinHeight);
+
+    /// <summary>Pastille ronde avec une icône, dans le ton de l'accent.</summary>
+    private void IconBadge(FontAwesomeIcon icon, float size)
+    {
+        var min = ImGui.GetCursorScreenPos();
+        var max = min + new Vector2(size, size);
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddCircleFilled((min + max) / 2f, size / 2f, Col(AccentPale), 32);
+        using (ImRaii.PushFont(UiBuilder.IconFont))
+        {
+            // L'icône un peu plus petite que la pastille, centrée sur son dessin.
+            ImGui.SetWindowFontScale(0.85f);
+            var (position, _) = PlaceIcon(icon, min, max);
+            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), position, Col(AccentInk), icon.ToIconString());
+            ImGui.SetWindowFontScale(1f);
+        }
+
+        ImGui.Dummy(new Vector2(size, size));
+    }
+
+    private static float BadgeSize => MathF.Round(30f * S);
+
+    /// <summary>En-tête d'un panneau : pastille d'icône, titre, et une étiquette à droite.</summary>
+    private void PanelHeader(string title, FontAwesomeIcon icon, string? right)
+    {
+        var start = ImGui.GetCursorPos();
+        var badge = BadgeSize;
+        IconBadge(icon, badge);
+
+        ImGui.SetCursorPos(new Vector2(start.X + badge + 10f * S, start.Y + MathF.Round((badge - ImGui.GetTextLineHeight()) / 2f)));
+        ImGui.TextUnformatted(title);
+
+        if (right != null)
+        {
+            var chip = ChipSize(right);
+            ImGui.SetCursorPos(new Vector2(start.X + cardInner - chip.X, start.Y + MathF.Round((badge - chip.Y) / 2f)));
+            Chip(right);
+        }
+
+        ImGui.SetCursorPos(new Vector2(start.X, start.Y + badge));
+        ImGui.Dummy(new Vector2(cardInner, 8f * S));
+    }
+
+    private static Vector2 ChipSize(string text) => new(TextWidth(text) + 24f * S, MathF.Round(ImGui.GetTextLineHeight() + 10f * S));
+
+    /// <summary>Étiquette en forme de pilule, sur un fond légèrement plus clair que le panneau.</summary>
+    private static void Chip(string text, Vector4? color = null)
+    {
+        var size = ChipSize(text);
+        var min = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.AddRectFilled(min, min + size, Col(InputBg), size.Y / 2f);
+        drawList.AddText(min + new Vector2(12f * S, MathF.Round((size.Y - ImGui.GetTextLineHeight()) / 2f)), Col(color ?? TextMain), text);
+        ImGui.Dummy(size);
+    }
+
+    /// <summary>Petit bouton rond (flèche, coche...) en haut à droite d'un panneau.</summary>
+    private bool CircleButton(string id, FontAwesomeIcon icon, float size)
+    {
+        var min = ImGui.GetCursorScreenPos();
+        var max = min + new Vector2(size, size);
+        var clicked = ImGui.InvisibleButton(id, max - min);
+        var hovered = ImGui.IsItemHovered();
+        var held = ImGui.IsItemActive();
+        ImGui.GetWindowDrawList().AddCircleFilled((min + max) / 2f, size / 2f, Col(held ? AccentSoft : hovered ? InputBgHover : InputBg), 32);
+        DrawIconCentered(icon, min, max, hovered ? TextMain : TextDim);
+        return clicked;
     }
 
     /// <summary>Ligne de réglage : texte à gauche, contrôle aligné à droite et centré verticalement.</summary>
@@ -240,7 +386,7 @@ public sealed partial class ConfigWindow
         }
 
         ImGui.SetCursorPos(new Vector2(start.X, start.Y + rowHeight));
-        ImGui.Dummy(new Vector2(cardInner, 2f * S));
+        ImGui.Dummy(new Vector2(cardInner, 4f * S));
     }
 
     private void SettingRow(string title, string? description, float controlWidth, Action? control, float? controlHeight = null) =>
@@ -316,44 +462,51 @@ public sealed partial class ConfigWindow
     }
 
     /// <summary>
-    /// Carte repliable : un clic sur sa ligne de titre l'ouvre ou la ferme. Le chevron tourne, le texte de droite
-    /// (un compteur, par exemple) reste visible fermé. Renvoie le nouvel état.
+    /// Ligne repliable dans un panneau : un clic sur son titre l'ouvre ou la ferme. Le chevron tourne, le texte de
+    /// droite (un compteur, par exemple) reste visible fermé. Un trait la sépare de la précédente. Renvoie le nouvel état.
     /// </summary>
-    private bool FoldingCard(string id, string title, string? right, bool open, Action content)
+    private bool FoldingRow(string id, string title, string? right, bool open, bool separator, Action content)
     {
-        Card(() =>
+        var drawList = ImGui.GetWindowDrawList();
+        if (separator)
         {
-            var min = ImGui.GetCursorScreenPos();
-            var size = new Vector2(cardInner, FrameH);
-            if (ImGui.InvisibleButton(id, size))
-                open = !open;
+            var p = ImGui.GetCursorScreenPos();
+            drawList.AddLine(p, p + new Vector2(cardInner, 0f), Col(Line));
+            ImGui.Dummy(new Vector2(cardInner, 4f * S));
+        }
 
-            var hovered = ImGui.IsItemHovered();
-            if (hovered)
-                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+        var min = ImGui.GetCursorScreenPos();
+        var size = new Vector2(cardInner, FrameH + 4f * S);
+        if (ImGui.InvisibleButton(id, size))
+            open = !open;
 
-            var drawList = ImGui.GetWindowDrawList();
-            var textY = MathF.Round(min.Y + (FrameH - ImGui.GetTextLineHeight()) / 2f);
-            drawList.AddText(new Vector2(min.X, textY), Col(hovered ? White : TextMain), title);
+        var hovered = ImGui.IsItemHovered();
+        if (hovered)
+            ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
 
-            // Le chevron pointe vers la droite fermé, vers le bas ouvert.
-            var turn = Animate(ImGui.GetID(id + "turn"), open ? 1f : 0f, 20f);
-            var chevronMax = min + size;
-            var chevronMin = new Vector2(chevronMax.X - FrameH, min.Y);
-            DrawChevron(drawList, (chevronMin + chevronMax) / 2f, 4f * S, turn, hovered ? TextMain : TextDim);
+        var textY = MathF.Round(min.Y + (size.Y - ImGui.GetTextLineHeight()) / 2f);
+        drawList.AddText(new Vector2(min.X, textY), Col(hovered ? White : TextMain), title);
 
-            if (right != null)
-            {
-                var rightW = TextWidth(right);
-                drawList.AddText(new Vector2(chevronMin.X - 4f * S - rightW, textY), Col(TextDim), right);
-            }
+        // Le chevron pointe vers la droite fermé, vers le bas ouvert.
+        var turn = Animate(ImGui.GetID(id + "turn"), open ? 1f : 0f, 20f);
+        var chevronMax = min + size;
+        var chevronMin = new Vector2(chevronMax.X - size.Y, min.Y);
+        DrawChevron(drawList, (chevronMin + chevronMax) / 2f, 4f * S, turn, hovered ? TextMain : TextDim);
 
-            if (open)
-            {
-                ImGui.Dummy(new Vector2(0, 2f * S));
-                content();
-            }
-        });
+        if (right != null)
+        {
+            var chip = ChipSize(right);
+            ImGui.SetCursorScreenPos(new Vector2(chevronMin.X - 4f * S - chip.X, min.Y + (size.Y - chip.Y) / 2f));
+            Chip(right, TextDim);
+            ImGui.SetCursorScreenPos(new Vector2(min.X, min.Y + size.Y));
+        }
+
+        if (open)
+        {
+            ImGui.Dummy(new Vector2(0, 2f * S));
+            content();
+            ImGui.Dummy(new Vector2(0, 4f * S));
+        }
 
         return open;
     }
@@ -374,28 +527,13 @@ public sealed partial class ConfigWindow
         drawList.AddLine(b, c, Col(color), thickness);
     }
 
-    /// <summary>Petit titre de section, avec un texte optionnel aligné à droite.</summary>
-    private void SectionTitle(string title, string? right = null)
-    {
-        ImGui.Dummy(new Vector2(0, 4f * S));
-        var start = ImGui.GetCursorPos();
-        ImGui.TextUnformatted(title);
-        if (right != null)
-        {
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(start.X + pageWidth - TextWidth(right));
-            ImGui.TextColored(TextDim, right);
-        }
-        ImGui.Dummy(new Vector2(0, 2f * S));
-    }
+    /// <summary>
+    /// Le titre du prochain panneau : il s'affiche dans son en-tête, avec une pastille d'icône et, à droite, une
+    /// étiquette (un compteur, un état...).
+    /// </summary>
+    private void SectionTitle(string title, FontAwesomeIcon icon, string? right = null) => pendingHeader = (title, icon, right);
 
-    /// <summary>Libellé en petites capitales grisées, comme un en-tête de carte.</summary>
-    private static void CardLabel(string text)
-    {
-        ImGui.TextColored(TextDim, text.ToUpperInvariant());
-    }
-
-    /// <summary>En-tête de page : salutation, grand titre, sous-titre et statistiques à droite.</summary>
+    /// <summary>En-tête de page : grand titre, sous-titre, et quelques étiquettes à droite.</summary>
     private void Hero(string title, string subtitle, string? statTop = null, string? statBottom = null)
     {
         var start = ImGui.GetCursorPos();
@@ -405,24 +543,23 @@ public sealed partial class ConfigWindow
         ImGui.TextColored(TextDim, subtitle);
         var end = ImGui.GetCursorPos();
 
-        var lineY = start.Y + 2f * S;
-        if (statTop != null)
+        // Les étiquettes s'alignent à droite, à la hauteur du titre.
+        var x = start.X + pageWidth;
+        foreach (var stat in new[] { statBottom, statTop })
         {
-            ImGui.SetCursorPos(new Vector2(start.X + pageWidth - TextWidth(statTop), lineY));
-            ImGui.TextUnformatted(statTop);
-        }
-        if (statBottom != null)
-        {
-            ImGui.SetCursorPos(new Vector2(start.X + pageWidth - TextWidth(statBottom), lineY + ImGui.GetTextLineHeightWithSpacing()));
-            ImGui.TextColored(TextDim, statBottom);
+            if (stat == null)
+                continue;
+
+            var chip = ChipSize(stat);
+            x -= chip.X;
+            ImGui.SetCursorPos(new Vector2(x, start.Y + 2f * S));
+            Chip(stat);
+            x -= 8f * S;
         }
 
         ImGui.SetCursorPos(end);
         ImGui.Dummy(new Vector2(pageWidth, 10f * S));
     }
-
-    /// <summary>Journée de 8h00 à 19h59 (heure du PC), soirée de 20h00 à 7h59.</summary>
-    private static bool IsDaytime => DateTime.Now.Hour is >= 8 and < 20;
 
     // ------------------------------------------------------------------ Contrôles
 
@@ -440,7 +577,7 @@ public sealed partial class ConfigWindow
         var trackH = SwitchTrackH;
         var trackMin = new Vector2(min.X, min.Y + (size.Y - trackH) / 2f);
         var trackMax = trackMin + new Vector2(size.X, trackH);
-        var off = hovered ? new Vector4(0.30f, 0.32f, 0.40f, 1f) : new Vector4(0.24f, 0.26f, 0.33f, 1f);
+        var off = hovered ? new Vector4(0.29f, 0.28f, 0.33f, 1f) : new Vector4(0.23f, 0.225f, 0.265f, 1f);
 
         // Le bouton rond glisse et la couleur se fond d'un état à l'autre.
         var t = Animate(key, value ? 1f : 0f, 20f);
@@ -464,15 +601,17 @@ public sealed partial class ConfigWindow
 
         if (primary)
         {
+            // Plein, de la couleur d'accent.
             var bg = held ? Vector4.Lerp(Accent, OnAccent, 0.22f) : hovered ? Vector4.Lerp(Accent, OnAccent, 0.10f) : Accent;
             bg.W = 1f;
-            drawList.AddRectFilled(min, max, Col(bg), 9f * S);
+            drawList.AddRectFilled(min, max, Col(bg), 12f * S);
             DrawIconLabel(icon, label, min, max, OnAccent);
         }
         else
         {
-            drawList.AddRectFilled(min, max, Col(held ? InputBgHover : hovered ? CardBgHover : InputBg), 9f * S);
-            drawList.AddRect(min, max, Col(hovered && danger ? Danger with { W = 0.6f } : Line), 9f * S);
+            // Pilule discrète, comme les étiquettes.
+            var rounding = (max.Y - min.Y) / 2f;
+            drawList.AddRectFilled(min, max, Col(held ? AccentSoft : hovered ? InputBgHover : InputBg), rounding);
             DrawIconLabel(icon, label, min, max, hovered && danger ? Danger : TextMain);
         }
 
@@ -489,9 +628,9 @@ public sealed partial class ConfigWindow
         var drawList = ImGui.GetWindowDrawList();
 
         if (active)
-            drawList.AddRectFilled(min, min + size, Col(AccentSoft), 7f * S);
+            drawList.AddCircleFilled(min + size / 2f, size.X / 2f, Col(AccentSoft), 32);
         else if (hovered)
-            drawList.AddRectFilled(min, min + size, Col(HoverOverlay), 7f * S);
+            drawList.AddCircleFilled(min + size / 2f, size.X / 2f, Col(InputBg), 32);
 
         var color = disabled ? TextDim with { W = 0.30f }
             : active ? Accent
@@ -505,23 +644,23 @@ public sealed partial class ConfigWindow
     private int Segmented(string id, IReadOnlyList<(string Label, FontAwesomeIcon Icon)> items, int selected, float? width = null)
     {
         var w = width ?? pageWidth;
-        var h = FrameH + 14f * S;
+        var h = FrameH + 12f * S;
         var inset = 4f * S;
         var startLocal = ImGui.GetCursorPos();
         var start = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
 
-        drawList.AddRectFilled(start, start + new Vector2(w, h), Col(CardBg), 12f * S);
-        drawList.AddRect(start, start + new Vector2(w, h), Col(Line), 12f * S);
+        // Une pilule sombre ; le choix en cours est une pilule pleine de la couleur d'accent qui glisse jusqu'à lui.
+        var outer = h / 2f;
+        var inner = (h - inset * 2) / 2f;
+        drawList.AddRectFilled(start, start + new Vector2(w, h), Col(CardBg), outer);
+        drawList.AddRect(start, start + new Vector2(w, h), Col(Line), outer);
 
         var segmentW = (w - inset * 2) / items.Count;
-
-        // Pastille de sélection : elle glisse jusqu'à l'onglet choisi.
         var slide = Animate(ImGui.GetID(id), selected, 18f);
         var pillMin = start + new Vector2(inset + slide * segmentW, inset);
         var pillMax = pillMin + new Vector2(segmentW, h - inset * 2);
-        drawList.AddRectFilled(pillMin, pillMax, Col(AccentSoft), 9f * S);
-        drawList.AddRect(pillMin, pillMax, Col(AccentBorder), 9f * S);
+        drawList.AddRectFilled(pillMin, pillMax, Col(Accent), inner);
 
         for (var i = 0; i < items.Count; i++)
         {
@@ -534,9 +673,12 @@ public sealed partial class ConfigWindow
             var hovered = ImGui.IsItemHovered();
             var active = i == selected;
             if (!active && hovered)
-                drawList.AddRectFilled(min, max, Col(HoverOverlay), 9f * S);
+                drawList.AddRectFilled(min, max, Col(HoverOverlay), inner);
 
-            DrawIconLabel(items[i].Icon, items[i].Label, min, max, active || hovered ? TextMain : TextDim);
+            // Le texte du choix suit la pilule : clair dessus, gris à côté.
+            var over = Math.Clamp(1f - MathF.Abs(slide - i), 0f, 1f);
+            var color = Vector4.Lerp(hovered ? TextMain : TextDim, OnAccent, over);
+            DrawIconLabel(items[i].Icon, items[i].Label, min, max, color);
         }
 
         ImGui.SetCursorPos(new Vector2(startLocal.X, startLocal.Y + h));

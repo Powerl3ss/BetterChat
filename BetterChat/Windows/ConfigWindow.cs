@@ -21,16 +21,29 @@ public sealed partial class ConfigWindow : Window, IDisposable
 {
     private enum Page { Home, Tabs, Context, Display, Alerts, Players, History, About }
 
-    private static readonly (Page Page, FontAwesomeIcon Icon)[] Pages =
+    // La navigation, rangée par thème : chaque groupe a son petit titre dans la barre latérale.
+    private static readonly (string Group, (Page Page, FontAwesomeIcon Icon, string Label)[] Items)[] Navigation =
     {
-        (Page.Home, FontAwesomeIcon.Home),
-        (Page.Tabs, FontAwesomeIcon.Columns),
-        (Page.Context, FontAwesomeIcon.MapMarkedAlt),
-        (Page.Display, FontAwesomeIcon.Palette),
-        (Page.Alerts, FontAwesomeIcon.Bell),
-        (Page.Players, FontAwesomeIcon.Users),
-        (Page.History, FontAwesomeIcon.History),
-        (Page.About, FontAwesomeIcon.InfoCircle),
+        ("Général", new[]
+        {
+            (Page.Home, FontAwesomeIcon.Home, "Accueil"),
+            (Page.Tabs, FontAwesomeIcon.Columns, "Onglets"),
+            (Page.Context, FontAwesomeIcon.MapMarkedAlt, "Selon le contexte"),
+        }),
+        ("Apparence", new[]
+        {
+            (Page.Display, FontAwesomeIcon.Palette, "Affichage"),
+        }),
+        ("Messages", new[]
+        {
+            (Page.Alerts, FontAwesomeIcon.Bell, "Alertes"),
+            (Page.Players, FontAwesomeIcon.Users, "Joueurs"),
+            (Page.History, FontAwesomeIcon.ShieldAlt, "Anti-spam"),
+        }),
+        ("Plus", new[]
+        {
+            (Page.About, FontAwesomeIcon.InfoCircle, "À propos"),
+        }),
     };
 
     private const string RepoUrl = "https://github.com/Powerl3ss/BetterChat";
@@ -57,7 +70,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoCollapse)
     {
         this.plugin = plugin;
-        Size = new Vector2(880, 680);
+        Size = new Vector2(1000, 720);
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = ExpandedConstraints;
 
@@ -67,16 +80,19 @@ public sealed partial class ConfigWindow : Window, IDisposable
         // 14 et 18 points (soit 18,67 et 24 pixels) sont des tailles exactes.
         titleFont = atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(14f * 4f / 3f)));
         heroFont = atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(24f)));
+        // 36 points (48 pixels) : les grands chiffres de l'accueil.
+        statFont = atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(36f * 4f / 3f)));
     }
 
     private readonly IFontHandle titleFont;
     private readonly IFontHandle heroFont;
+    private readonly IFontHandle statFont;
 
     // Tailles en pixels "non mis à l'échelle" (Dalamud applique l'échelle de l'interface).
     private const float HeaderHeight = 44f;
     private static readonly WindowSizeConstraints ExpandedConstraints = new()
     {
-        MinimumSize = new Vector2(780, 560),
+        MinimumSize = new Vector2(860, 600),
         MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
     };
     private static readonly WindowSizeConstraints CollapsedConstraints = new()
@@ -134,6 +150,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         FlushSave();
         titleFont.Dispose();
         heroFont.Dispose();
+        statFont.Dispose();
         if (logoTask is { IsCompletedSuccessfully: true })
             logoTask.Result?.Dispose();
     }
@@ -150,7 +167,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
     public override void PreDraw()
     {
         windowStyle = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero)
-                            .Push(ImGuiStyleVar.WindowRounding, 14f * S)
+                            .Push(ImGuiStyleVar.WindowRounding, 22f * S)
                             .Push(ImGuiStyleVar.WindowBorderSize, 1f);
         windowColors = ImRaii.PushColor(ImGuiCol.WindowBg, WindowBg)
                              .Push(ImGuiCol.Border, Line);
@@ -174,9 +191,9 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     public override void Draw()
     {
-        using var style = ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 7f * S)
-                                .Push(ImGuiStyleVar.GrabRounding, 7f * S)
-                                .Push(ImGuiStyleVar.PopupRounding, 8f * S)
+        using var style = ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 10f * S)
+                                .Push(ImGuiStyleVar.GrabRounding, 10f * S)
+                                .Push(ImGuiStyleVar.PopupRounding, 10f * S)
                                 .Push(ImGuiStyleVar.ScrollbarRounding, 8f * S)
                                 .Push(ImGuiStyleVar.ScrollbarSize, 10f * S)
                                 .Push(ImGuiStyleVar.FramePadding, new Vector2(10f, 6f) * S)
@@ -197,7 +214,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                                  .Push(ImGuiCol.CheckMark, Accent)
                                  .Push(ImGuiCol.SliderGrab, Accent)
                                  .Push(ImGuiCol.SliderGrabActive, Vector4.Lerp(Accent, White, 0.2f))
-                                 .Push(ImGuiCol.PopupBg, new Vector4(0.09f, 0.10f, 0.13f, 0.98f))
+                                 .Push(ImGuiCol.PopupBg, new Vector4(0.110f, 0.106f, 0.129f, 0.99f))
                                  .Push(ImGuiCol.ScrollbarBg, Vector4.Zero)
                                  .Push(ImGuiCol.ScrollbarGrab, new Vector4(1f, 1f, 1f, 0.12f))
                                  .Push(ImGuiCol.ScrollbarGrabHovered, new Vector4(1f, 1f, 1f, 0.20f))
@@ -207,151 +224,111 @@ public sealed partial class ConfigWindow : Window, IDisposable
         var size = ImGui.GetWindowSize();
         lastSize = size;
         var origin = ImGui.GetWindowPos();
-        var headerH = HeaderHeight * S;
-        var footerH = 44f * S;
-        var sidebarW = 64f * S;
+        var margin = PanelGap;
+        var sidebarW = 216f * S;
         var drawList = ImGui.GetWindowDrawList();
 
         DrawAnimatedBackground(origin, size);
 
-        // Repliée, ou pas encore assez haute pendant l'animation : seulement l'en-tête.
-        if (collapsed || size.Y < headerH + footerH + 80f * S)
-        {
-            DrawTitleBar(size, headerH);
-            return;
-        }
+        // La barre latérale est un panneau à part, posé sur le fond comme les autres.
+        var sidebarMin = origin + new Vector2(margin, margin);
+        var sidebarMax = origin + new Vector2(margin + sidebarW, size.Y - margin);
+        drawList.AddRectFilled(sidebarMin, sidebarMax, Col(CardBg), PanelRounding);
+        drawList.AddRect(sidebarMin, sidebarMax, Col(Line), PanelRounding);
+        DrawSidebar(sidebarMin, sidebarMax);
 
-        drawList.AddRectFilled(origin + new Vector2(0, headerH), origin + new Vector2(sidebarW, size.Y - footerH), Col(SidebarBg));
-        drawList.AddLine(origin + new Vector2(0, headerH), origin + new Vector2(size.X, headerH), Col(Line));
-        drawList.AddLine(origin + new Vector2(sidebarW, headerH), origin + new Vector2(sidebarW, size.Y - footerH), Col(Line));
-        drawList.AddLine(origin + new Vector2(0, size.Y - footerH), origin + new Vector2(size.X, size.Y - footerH), Col(Line));
-
-        DrawTitleBar(size, headerH);
-        DrawSidebar(headerH, sidebarW);
-
-        ImGui.SetCursorPos(new Vector2(sidebarW + 1, headerH + 1));
-        using (var child = ImRaii.Child("##page", new Vector2(size.X - sidebarW - 1, size.Y - headerH - footerH - 2), false))
+        var pageX = margin + sidebarW;
+        ImGui.SetCursorPos(new Vector2(pageX, 0f));
+        using (var child = ImRaii.Child("##page", new Vector2(size.X - pageX, size.Y), false))
         {
             if (child.Success)
                 DrawPage();
         }
-
-        DrawFooter(size, footerH);
     }
 
-    private void DrawTitleBar(Vector2 size, float headerH)
+    private void DrawSidebar(Vector2 min, Vector2 max)
     {
-        var pad = 18f * S;
-        var logoSize = 24f * S;
+        var pad = 14f * S;
+        var origin = ImGui.GetWindowPos();
+        var drawList = ImGui.GetWindowDrawList();
+        var width = max.X - min.X - pad * 2;
+        var x = min.X - origin.X + pad;
+        var y = min.Y - origin.Y + pad + 4f * S;
 
-        ImGui.SetCursorPos(new Vector2(pad, (headerH - logoSize) / 2f));
+        // Le logo, le nom, et la croix pour fermer.
+        var logoSize = 30f * S;
+        ImGui.SetCursorPos(new Vector2(x, y));
         DrawLogo(logoSize);
-
-        ImGui.SameLine(0, 12f * S);
         using (titleFont.Push())
         {
-            ImGui.SetCursorPosY((headerH - ImGui.GetTextLineHeight()) / 2f);
+            ImGui.SetCursorPos(new Vector2(x + logoSize + 10f * S, y + MathF.Round((logoSize - ImGui.GetTextLineHeight()) / 2f)));
             ImGui.TextUnformatted("BetterChat");
         }
-        var titleMin = ImGui.GetItemRectMin();
-        var titleMax = ImGui.GetItemRectMax();
 
-        var loggedIn = Plugin.CurrentCharacterId != 0;
-        ImGui.SameLine(0, 12f * S);
-        ImGui.SetCursorPosY((headerH - FrameH) / 2f);
-        if (loggedIn)
-            Pill(plugin.LocalName, Success, dot: true, centerInFrame: true);
-        else
-            Pill("Hors ligne", TextDim, dot: true, centerInFrame: true);
-
-        ImGui.SetWindowFontScale(0.95f); // soleil / lune un peu plus petits que le titre
-
-        // Soleil la journée, lune le soir (heure réelle du PC), à la taille du titre
-        // et centré verticalement sur lui.
-        ImGui.SameLine(0, 10f * S);
-        var dayIcon = IsDaytime ? FontAwesomeIcon.Sun : FontAwesomeIcon.Moon;
-        var box = titleMax.Y - titleMin.Y;
-        var boxMin = new Vector2(ImGui.GetCursorScreenPos().X, (titleMin.Y + titleMax.Y) / 2f - box / 2f);
-        ImGui.SetCursorScreenPos(boxMin);
-        ImGui.Dummy(new Vector2(box, box));
-        DrawIconCentered(dayIcon, boxMin, boxMin + new Vector2(box, box), IsDaytime ? SunColor : MoonColor);
-        ImGui.SetWindowFontScale(1f);
-
-        var buttonY = (headerH - FrameH) / 2f;
-        ImGui.SetCursorPos(new Vector2(size.X - pad - FrameH, buttonY));
+        ImGui.SetCursorPos(new Vector2(x + width - FrameH, y + (logoSize - FrameH) / 2f));
         if (IconButton("##close", FontAwesomeIcon.Times))
             IsOpen = false;
 
-        ImGui.SetCursorPos(new Vector2(size.X - pad - FrameH * 2 - 6f * S, buttonY));
-        if (IconButton("##fold", collapsed ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronUp))
-            ToggleWindowCollapsed();
+        // Le personnage connecté, ou hors ligne.
+        y += logoSize + 12f * S;
+        var loggedIn = Plugin.CurrentCharacterId != 0;
+        var dotY = origin.Y + y + ImGui.GetTextLineHeight() / 2f;
+        drawList.AddCircleFilled(new Vector2(origin.X + x + 4f * S, dotY), 3.5f * S, Col(loggedIn ? Success : TextFaint));
+        ImGui.SetCursorPos(new Vector2(x + 14f * S, y));
+        ImGui.TextColored(TextDim, loggedIn ? plugin.LocalName : "Hors ligne");
+        y += ImGui.GetTextLineHeight() + 18f * S;
 
-        ImGui.SetCursorPos(new Vector2(size.X - pad - FrameH * 3 - 12f * S, buttonY));
-        if (IconButton("##chat", Cfg.ChatVisible ? FontAwesomeIcon.Eye : FontAwesomeIcon.EyeSlash))
-            plugin.ToggleChat();
-
-        // Double-clic sur l'en-tête (hors boutons) : replie ou déplie la fenêtre.
-        var origin = ImGui.GetWindowPos();
-        var mouse = ImGui.GetMousePos();
-        var inHeader = mouse.X >= origin.X && mouse.X < origin.X + size.X &&
-                       mouse.Y >= origin.Y && mouse.Y < origin.Y + headerH;
-        if (inHeader && ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() &&
-            ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-            ToggleWindowCollapsed();
-    }
-
-    private void DrawSidebar(float headerH, float sidebarW)
-    {
-        var button = 40f * S;
-        var gap = 8f * S;
-        var x = (sidebarW - button) / 2f;
-        var origin = ImGui.GetWindowPos();
-        var drawList = ImGui.GetWindowDrawList();
-
-        // Surlignage de la page active : il glisse jusqu'à la nouvelle page.
-        var activeIndex = Array.FindIndex(Pages, p => p.Page == page);
-        var slide = Animate(ImGui.GetID("##navHighlight"), activeIndex, 18f);
-        var highlightMin = origin + new Vector2(x, headerH + 14f * S + slide * (button + gap));
-        var highlightMax = highlightMin + new Vector2(button, button);
-        drawList.AddRectFilled(highlightMin, highlightMax, Col(AccentSoft), 10f * S);
-        drawList.AddRect(highlightMin, highlightMax, Col(AccentBorder), 10f * S);
-        drawList.AddRectFilled(new Vector2(origin.X, highlightMin.Y + 9f * S), new Vector2(origin.X + 3f * S, highlightMax.Y - 9f * S), Col(Accent), 2f * S);
-
-        for (var i = 0; i < Pages.Length; i++)
+        // Les pages, par groupe. Le surlignage de la page active glisse jusqu'à la nouvelle.
+        var itemH = 36f * S;
+        var activeY = y;
+        var positions = new List<(Page Page, FontAwesomeIcon Icon, string Label, float Y)>();
+        foreach (var (group, items) in Navigation)
         {
-            var (target, icon) = Pages[i];
-            ImGui.SetCursorPos(new Vector2(x, headerH + 14f * S + i * (button + gap)));
-            var min = ImGui.GetCursorScreenPos();
-            var max = min + new Vector2(button, button);
-            if (ImGui.InvisibleButton($"##nav{i}", new Vector2(button, button)))
+            ImGui.SetCursorPos(new Vector2(x + 8f * S, y));
+            ImGui.TextColored(TextFaint, group.ToUpperInvariant());
+            y += ImGui.GetTextLineHeight() + 6f * S;
+
+            foreach (var (target, icon, label) in items)
+            {
+                positions.Add((target, icon, label, y));
+                if (target == page)
+                    activeY = y;
+                y += itemH + 2f * S;
+            }
+
+            y += 10f * S;
+        }
+
+        var slide = Animate(ImGui.GetID("##navHighlight"), activeY, 18f);
+        var highlightMin = origin + new Vector2(x, slide);
+        drawList.AddRectFilled(highlightMin, highlightMin + new Vector2(width, itemH), Col(InputBg), 11f * S);
+
+        foreach (var (target, icon, label, itemY) in positions)
+        {
+            ImGui.SetCursorPos(new Vector2(x, itemY));
+            var itemMin = ImGui.GetCursorScreenPos();
+            var itemMax = itemMin + new Vector2(width, itemH);
+            if (ImGui.InvisibleButton($"##nav{target}", itemMax - itemMin))
                 page = target;
 
             var hovered = ImGui.IsItemHovered();
             var active = page == target;
             if (!active && hovered)
-                drawList.AddRectFilled(min, max, Col(HoverOverlay), 10f * S);
+                drawList.AddRectFilled(itemMin, itemMax, Col(HoverOverlay), 11f * S);
 
-            DrawIconCentered(icon, min, max, active ? Accent : hovered ? TextMain : TextDim);
+            var iconBox = new Vector2(itemH, itemH);
+            DrawIconCentered(icon, itemMin + new Vector2(4f * S, 0f), itemMin + new Vector2(4f * S, 0f) + iconBox, active ? Accent : hovered ? TextMain : TextDim);
+            var textY = MathF.Round(itemMin.Y + (itemH - ImGui.GetTextLineHeight()) / 2f);
+            drawList.AddText(new Vector2(itemMin.X + itemH + 4f * S, textY), Col(active || hovered ? TextMain : TextDim), label);
         }
-    }
 
-    private void DrawFooter(Vector2 size, float footerH)
-    {
-        var pad = 18f * S;
-        var status = FooterStatus();
-        var statusSize = ImGui.CalcTextSize(status);
-        ImGui.SetCursorPos(new Vector2(size.X - pad - statusSize.X, size.Y - footerH + (footerH - statusSize.Y) / 2f));
-        ImGui.TextColored(TextDim, status);
-    }
-
-    private string FooterStatus()
-    {
-        if (plugin.OtherChatPluginLoaded)
-            return "Un autre plugin de chat est actif : le chat du jeu n'est pas masqué";
-        if (Plugin.CurrentCharacterId == 0)
-            return "Connecte-toi en jeu pour utiliser le chat";
-
-        return $"{plugin.Messages.Lines.Count} messages en mémoire";
+        // En bas, l'action principale : afficher BetterChat ou revenir au chat du jeu.
+        var label2 = Cfg.ChatVisible ? "Revenir au chat du jeu" : "Afficher BetterChat";
+        var icon2 = Cfg.ChatVisible ? FontAwesomeIcon.EyeSlash : FontAwesomeIcon.Eye;
+        var buttonH = FrameH + 10f * S;
+        ImGui.SetCursorPos(new Vector2(x, max.Y - origin.Y - pad - buttonH));
+        if (FancyButton("##chatVisible", label2, icon2, new Vector2(width, buttonH), primary: Cfg.ChatVisible == false))
+            plugin.ToggleChat();
     }
 
     private void DrawLogo(float size)
@@ -391,8 +368,9 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawPage()
     {
-        var pad = 24f * S;
-        pageWidth = ImGui.GetContentRegionAvail().X - pad * 2;
+        var pad = PanelGap;
+        // La barre de défilement passe dans la marge de droite.
+        pageWidth = ImGui.GetContentRegionAvail().X - pad - ImGui.GetStyle().ScrollbarSize;
         cardInner = pageWidth;
 
         // Transition : la nouvelle page apparaît en fondu en remontant légèrement.
@@ -402,7 +380,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             ImGui.SetScrollY(0);
         using var fade = ImRaii.PushStyle(ImGuiStyleVar.Alpha, Math.Max(0.02f, appear) * ImGui.GetStyle().Alpha);
 
-        ImGui.SetCursorPos(new Vector2(pad, pad * 0.8f + (1f - appear) * 16f * S));
+        ImGui.SetCursorPos(new Vector2(pad, pad + 6f * S + (1f - appear) * 16f * S));
         ImGui.BeginGroup();
         switch (page)
         {
@@ -473,70 +451,253 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
     private void DrawHomePage()
     {
-        var game = plugin.Game;
         var replaced = Cfg.ChatVisible && Cfg.HideNativeChat && !plugin.OtherChatPluginLoaded;
-        Hero(replaced ? "Le chat du jeu est remplacé." : "BetterChat est en retrait.",
-             replaced ? "Entrée ouvre la saisie, comme d'habitude." : "Le chat du jeu reste affiché.",
-             Cfg.ChatVisible ? "Chat affiché" : "Chat masqué",
-             GameChat.ChannelLabel(game.CurrentChannel));
+        Hero(Greeting(),
+             replaced ? "Le chat du jeu est remplacé : Entrée ouvre la saisie, comme d'habitude." : "BetterChat est en retrait : le chat du jeu reste affiché.",
+             GameChat.ChannelLabel(plugin.Game.CurrentChannel));
 
         if (plugin.OtherChatPluginLoaded)
         {
-            Card(() =>
-            {
-                IconText(FontAwesomeIcon.ExclamationTriangle, Danger);
-                ImGui.SameLine();
-                ImGui.TextUnformatted("Un autre plugin de chat est actif");
-                TextDimmed("Chat 2 remplace aussi le chat du jeu : les deux se disputeraient la touche Entrée. BetterChat ne masque rien tant qu'il est chargé. Désactive-le dans /xlplugins pour utiliser BetterChat.");
-            });
+            SectionTitle("Un autre plugin de chat est actif", FontAwesomeIcon.ExclamationTriangle);
+            Card(() => TextDimmed("Chat 2 remplace aussi le chat du jeu : les deux se disputeraient la touche Entrée. BetterChat ne masque rien tant qu'il est chargé. Désactive-le dans /xlplugins pour utiliser BetterChat."));
         }
 
+        var activity = Activity();
+        DrawActivityPanel(activity);
+        DrawStatCards(activity);
+
         var changed = false;
-        SectionTitle("L'essentiel");
-        Card(() =>
+        CardRow("##homeBottom", 2, (i, width) =>
         {
-            changed |= ToggleRow("Afficher BetterChat", "Raccourci : /bchat. Masqué, le chat du jeu revient.", Cfg.ChatVisible, v =>
+            if (i == 0)
             {
-                if (v != Cfg.ChatVisible)
-                    plugin.ToggleChat();
-            });
-            changed |= ToggleRow("Masquer le chat du jeu", "Désactivé, les deux chats sont affichés côte à côte.", Cfg.HideNativeChat, v => Cfg.HideNativeChat = v);
-            var style = (int)Cfg.Style;
-            SettingRow("Présentation", "Moderne : le nom au-dessus des messages. Compacte : tout sur une ligne.", 280f * S, () =>
+                SectionTitle("L'essentiel", FontAwesomeIcon.Star);
+                RowCard(width, () =>
+                {
+                    changed |= ToggleRow("Masquer le chat du jeu", "Désactivé, les deux chats sont affichés côte à côte.", Cfg.HideNativeChat, v => Cfg.HideNativeChat = v);
+                    changed |= ToggleRow("Fond animé des réglages", "Halos lumineux et particules derrière cette fenêtre.", Cfg.AnimatedSettingsBackground, v => Cfg.AnimatedSettingsBackground = v);
+                    SettingRow("Présentation", "Moderne : le nom au-dessus des messages. Compacte : tout sur une ligne.", 0f, null);
+                    var style = (int)Cfg.Style;
+                    var chosen = Segmented("##homeStyle", new[]
+                    {
+                        ("Moderne", FontAwesomeIcon.Comments),
+                        ("Compacte", FontAwesomeIcon.AlignLeft),
+                    }, style, cardInner);
+                    if (chosen != style)
+                    {
+                        Cfg.Style = (ChatStyle)chosen;
+                        changed = true;
+                    }
+                });
+            }
+            else
             {
-                var chosen = Segmented("##homeStyle", new[]
+                SectionTitle("Pour bien démarrer", FontAwesomeIcon.Lightbulb);
+                RowCard(width, () =>
                 {
-                    ("Moderne", FontAwesomeIcon.Comments),
-                    ("Compacte", FontAwesomeIcon.AlignLeft),
-                }, style, 280f * S);
-                if (chosen != style)
-                {
-                    Cfg.Style = (ChatStyle)chosen;
-                    changed = true;
-                }
-            }, FrameH + 20f * S);
-        });
-
-        SectionTitle("Pour bien démarrer");
-        Card(() =>
-        {
-            TextDimmed("Entrée ouvre la saisie. Les flèches haut et bas rappellent tes derniers messages.");
-            TextDimmed("Pour changer de canal : clique sur la pastille à gauche de la saisie, tape « /p bonjour », ou appuie sur Tab quand la saisie est vide.");
-            TextDimmed("Autotraduction : clique sur son bouton à droite de la saisie, ou tape le début d'un mot puis Tab.");
-            TextDimmed("Clique sur un nom, un objet ou une carte dans un message. Sélectionne du texte à la souris, puis clic droit pour le copier. Le clic droit sur un message permet aussi de l'épingler en haut de l'onglet.");
-            TextDimmed("Les messages privés se rangent par personne : une pastille par conversation, au-dessus de l'onglet.");
-            TextDimmed("La loupe cherche dans l'onglet affiché, par exemple : de:Jean canal:CL date:hier.");
-            TextDimmed("L'épingle en haut du chat verrouille la fenêtre. Clic droit sur un onglet : le détacher dans sa propre fenêtre, l'exporter dans un fichier.");
-        });
-
-        SectionTitle("Cette fenêtre");
-        Card(() =>
-        {
-            changed |= ToggleRow("Fond animé", "Halos lumineux et particules derrière les réglages.", Cfg.AnimatedSettingsBackground, v => Cfg.AnimatedSettingsBackground = v);
+                    HintLine("Entrée ouvre la saisie. Les flèches haut et bas rappellent les derniers messages.");
+                    HintLine("Changer de canal : la pastille à gauche de la saisie, « /p bonjour », ou Tab dans une saisie vide.");
+                    HintLine("Autotraduction : le bouton à droite de la saisie, ou le début d'un mot puis Tab.");
+                    HintLine("Clic droit sur un message : répondre, copier, épingler.");
+                    HintLine("Les messages privés se rangent par personne, une pastille par conversation.");
+                    HintLine("La loupe cherche dans l'onglet affiché : de:Jean canal:CL date:hier.");
+                    HintLine("Clic droit sur un onglet : le détacher dans sa propre fenêtre, l'exporter.");
+                }, glow: true);
+            }
         });
 
         if (changed)
             SaveSoon();
+    }
+
+    /// <summary>« Bonjour, Prénom » ou « Bonsoir, Prénom » selon l'heure du PC.</summary>
+    private string Greeting()
+    {
+        var hello = DateTime.Now.Hour is >= 5 and < 18 ? "Bonjour" : "Bonsoir";
+        var name = plugin.LocalName;
+        if (Plugin.CurrentCharacterId == 0 || string.IsNullOrWhiteSpace(name))
+            return $"{hello} !";
+
+        var first = name.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+        return $"{hello}, {first}";
+    }
+
+    /// <summary>Une astuce : un point de la couleur d'accent, puis le texte.</summary>
+    private void HintLine(string text)
+    {
+        var start = ImGui.GetCursorScreenPos();
+        var dotY = start.Y + ImGui.GetTextLineHeight() / 2f;
+        ImGui.GetWindowDrawList().AddCircleFilled(new Vector2(start.X + 3f * S, dotY), 3f * S, Col(Accent));
+        ImGui.SetCursorScreenPos(start + new Vector2(14f * S, 0f));
+        using (ImRaii.PushColor(ImGuiCol.Text, TextDim))
+            ImGui.TextWrapped(text);
+        ImGui.Dummy(new Vector2(0f, 2f * S));
+    }
+
+    // L'activité est recalculée toutes les quelques secondes : elle parcourt tous les messages en mémoire.
+    private ChatActivity? activity;
+    private double activityAt = -10;
+
+    private ChatActivity Activity()
+    {
+        var now = ImGui.GetTime();
+        if (activity == null || now - activityAt > 5)
+        {
+            activity = ChatActivity.Compute(plugin.Messages.Lines, DateTime.Now);
+            activityAt = now;
+        }
+
+        return activity;
+    }
+
+    private static readonly string[] ShortDays = { "Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam" };
+
+    /// <summary>Les messages des joueurs sur sept jours, par tranche de deux heures : plus c'est clair, plus le chat a parlé.</summary>
+    private void DrawActivityPanel(ChatActivity data)
+    {
+        SectionTitle("Activité de la semaine", FontAwesomeIcon.ChartBar, "7 derniers jours");
+        Card(() =>
+        {
+            // Légende.
+            var levels = new[] { ("Calme", 1), ("Moyen", 2), ("Animé", 3), ("Très animé", 4) };
+            foreach (var (label, level) in levels)
+            {
+                var p = ImGui.GetCursorScreenPos();
+                ImGui.GetWindowDrawList().AddCircleFilled(p + new Vector2(4f * S, ImGui.GetTextLineHeight() / 2f), 4f * S, Col(LevelColor(level)));
+                ImGui.SetCursorScreenPos(p + new Vector2(13f * S, 0f));
+                ImGui.TextColored(TextDim, label);
+                ImGui.SameLine(0, 16f * S);
+            }
+
+            ImGui.NewLine();
+            ImGui.Dummy(new Vector2(0, 4f * S));
+
+            var drawList = ImGui.GetWindowDrawList();
+            var labelW = TextWidth("Mer") + 14f * S;
+            var gap = 5f * S;
+            var cellW = (cardInner - labelW - gap * (ChatActivity.Slots - 1)) / ChatActivity.Slots;
+            var cellH = MathF.Round(MathF.Min(cellW * 0.7f, 26f * S));
+            var origin = ImGui.GetCursorScreenPos();
+            var lineH = ImGui.GetTextLineHeight();
+
+            for (var day = 0; day < ChatActivity.Days; day++)
+            {
+                var y = origin.Y + day * (cellH + gap);
+                var date = data.FirstDay.AddDays(day);
+                var isToday = day == ChatActivity.Days - 1;
+                drawList.AddText(new Vector2(origin.X, MathF.Round(y + (cellH - lineH) / 2f)), Col(isToday ? TextMain : TextDim), ShortDays[(int)date.DayOfWeek]);
+
+                for (var slot = 0; slot < ChatActivity.Slots; slot++)
+                {
+                    var min = new Vector2(origin.X + labelW + slot * (cellW + gap), y);
+                    drawList.AddRectFilled(min, min + new Vector2(cellW, cellH), Col(LevelColor(data.Level(day, slot))), 6f * S);
+                }
+            }
+
+            // Les heures sous la grille.
+            var hoursY = origin.Y + ChatActivity.Days * (cellH + gap);
+            for (var slot = 0; slot < ChatActivity.Slots; slot += 2)
+            {
+                var text = $"{slot * ChatActivity.HoursPerSlot}h";
+                var x = origin.X + labelW + slot * (cellW + gap) + (cellW - TextWidth(text)) / 2f;
+                drawList.AddText(new Vector2(MathF.Round(x), hoursY), Col(TextFaint), text);
+            }
+
+            ImGui.Dummy(new Vector2(cardInner, hoursY + lineH - origin.Y));
+        });
+    }
+
+    /// <summary>De la case vide (0) à la couleur d'accent pleine (4).</summary>
+    private Vector4 LevelColor(int level) => level switch
+    {
+        0 => new Vector4(1f, 1f, 1f, 0.04f),
+        1 => Accent with { W = 0.22f },
+        2 => Accent with { W = 0.42f },
+        3 => Accent with { W = 0.68f },
+        _ => Vector4.Lerp(Accent, White, 0.25f) with { W = 1f },
+    };
+
+    /// <summary>Quatre chiffres du jour, deux par rangée.</summary>
+    private void DrawStatCards(ChatActivity data)
+    {
+        var unread = plugin.Feeds.Sum(f => f.Unread);
+        var unreadTabs = plugin.Feeds.Count(f => f.Unread > 0);
+        var conversations = plugin.Conversations.All;
+        var unreadTells = conversations.Sum(c => c.Unread);
+
+        string? change = null;
+        var changeColor = Accent;
+        if (data.ChangeFromYesterday is { } percent)
+        {
+            change = $"{(percent >= 0 ? "+" : "-")}{MathF.Abs(percent):0} %";
+            changeColor = percent >= 0 ? Accent : Danger;
+        }
+
+        CardRow("##stats1", 2, (i, width) =>
+        {
+            if (i == 0)
+                StatCard(width, "##statMessages", FontAwesomeIcon.CommentDots, "Messages du jour", data.Today.ToString(),
+                         change, changeColor, change != null ? "par rapport à hier" : "aucun message hier",
+                         FontAwesomeIcon.ArrowRight, () => page = Page.History, glow: false);
+            else
+                StatCard(width, "##statMentions", FontAwesomeIcon.At, "Mentions", data.MentionsToday.ToString(),
+                         null, Accent, data.MentionsToday == 0 ? "personne ne t'a cité aujourd'hui" : "aujourd'hui",
+                         FontAwesomeIcon.ArrowRight, () => page = Page.Alerts, glow: false);
+        });
+
+        CardRow("##stats2", 2, (i, width) =>
+        {
+            if (i == 0)
+                StatCard(width, "##statUnread", FontAwesomeIcon.Bell, "Non lus", unread.ToString(),
+                         unreadTabs > 0 ? $"{unreadTabs} onglet(s)" : null, Accent, unreadTabs > 0 ? "à rattraper" : "tout est lu",
+                         FontAwesomeIcon.CheckDouble, () =>
+                         {
+                             foreach (var feed in plugin.Feeds)
+                                 feed.MarkRead();
+                         }, glow: false);
+            else
+                StatCard(width, "##statTells", FontAwesomeIcon.Envelope, "Conversations", conversations.Count.ToString(),
+                         unreadTells > 0 ? $"{unreadTells} non lu(s)" : null, Accent, unreadTells > 0 ? "en messages privés" : "messages privés à jour",
+                         FontAwesomeIcon.CheckDouble, () =>
+                         {
+                             foreach (var conversation in conversations)
+                                 plugin.Conversations.MarkRead(conversation.Key);
+                         }, glow: true);
+        });
+    }
+
+    /// <summary>
+    /// Un grand chiffre : pastille d'icône et titre, un bouton rond à droite, le chiffre, puis une ligne
+    /// dont le début est coloré (une évolution, un compte).
+    /// </summary>
+    private void StatCard(float width, string id, FontAwesomeIcon icon, string label, string value, string? highlight,
+                          Vector4 highlightColor, string caption, FontAwesomeIcon actionIcon, Action action, bool glow)
+    {
+        RowCard(width, () =>
+        {
+            var start = ImGui.GetCursorPos();
+            var badge = BadgeSize;
+            IconBadge(icon, badge);
+            ImGui.SetCursorPos(new Vector2(start.X + badge + 10f * S, start.Y + MathF.Round((badge - ImGui.GetTextLineHeight()) / 2f)));
+            ImGui.TextUnformatted(label);
+
+            ImGui.SetCursorPos(new Vector2(start.X + cardInner - badge, start.Y));
+            if (CircleButton(id, actionIcon, badge))
+                action();
+
+            ImGui.SetCursorPos(new Vector2(start.X, start.Y + badge + 14f * S));
+            using (statFont.Push())
+                ImGui.TextUnformatted(value);
+
+            ImGui.Dummy(new Vector2(0f, 2f * S));
+            if (highlight != null)
+            {
+                ImGui.TextColored(highlightColor, highlight);
+                ImGui.SameLine(0, 6f * S);
+            }
+
+            ImGui.TextColored(TextDim, caption);
+        }, glow);
     }
 
     // =================================================================== Onglets
@@ -550,6 +711,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         editedTab = Math.Clamp(editedTab, 0, Cfg.Tabs.Count - 1);
         var structureChanged = false;
 
+        SectionTitle("Liste des onglets", FontAwesomeIcon.Columns, "Clic : modifier");
         Card(() =>
         {
             for (var i = 0; i < Cfg.Tabs.Count; i++)
@@ -650,7 +812,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         var changed = false;
         var filtersChanged = false;
 
-        SectionTitle("Réglages de l'onglet", tab.Name);
+        SectionTitle("Réglages de l'onglet", FontAwesomeIcon.SlidersH, tab.Name);
         Card(() =>
         {
             SettingRow("Nom", null, 260f * S, () =>
@@ -693,14 +855,17 @@ public sealed partial class ConfigWindow : Window, IDisposable
             });
         });
 
-        SectionTitle("Messages affichés");
+        SectionTitle("Messages affichés", FontAwesomeIcon.Filter, $"{tab.Kinds.Count} type(s)");
+        Card(() =>
+        {
+        var first = true;
         foreach (var section in Enum.GetValues<ChatSection>())
         {
             var kinds = ChatKinds.All.Where(i => i.Section == section).ToList();
             var enabled = kinds.Count(k => tab.Kinds.Contains(k.Kind));
             var open = openSections.Contains(section);
 
-            var nowOpen = FoldingCard($"##section{section}", ChatKinds.SectionLabel(section), $"{enabled} / {kinds.Count}", open, () =>
+            var nowOpen = FoldingRow($"##section{section}", ChatKinds.SectionLabel(section), $"{enabled} / {kinds.Count}", open, !first, () =>
             {
                 if (ImGui.SmallButton($"Tout cocher##{section}"))
                 {
@@ -767,7 +932,10 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 else
                     openSections.Remove(section);
             }
+
+            first = false;
         }
+        });
 
         if (filtersChanged)
             plugin.FiltersChanged();
@@ -780,13 +948,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
     /// <summary>Changer d'onglet ou masquer des canaux selon l'endroit : donjon, raid, ville.</summary>
     private void DrawContextPage()
     {
-        Hero("Selon le contexte", "Change d'onglet et masque des canaux selon l'endroit.", "Actuellement", ChatContexts.Label(plugin.Context));
+        Hero("Selon le contexte", "Change d'onglet et masque des canaux selon l'endroit.", $"Actuellement : {ChatContexts.Label(plugin.Context)}");
+        SectionTitle("Comment ça marche", FontAwesomeIcon.Lightbulb);
         Card(() => TextDimmed("En entrant dans un donjon, un raid ou une ville, le chat peut changer d'onglet et masquer des canaux. En sortant, l'onglet d'avant revient et les canaux réapparaissent."));
 
         foreach (var context in ChatContexts.Configurable)
         {
             var rule = Cfg.RuleFor(context)!;
-            SectionTitle(ChatContexts.Label(context), rule.TabId.Length == 0 && rule.Hidden.Count == 0 ? "Rien ne change" : null);
+            SectionTitle(ChatContexts.Label(context), ContextIcon(context), rule.TabId.Length == 0 && rule.Hidden.Count == 0 ? "Rien ne change" : "Actif");
             Card(() =>
             {
                 SettingRow("Onglet à afficher", null, 220f * S, () =>
@@ -853,6 +1022,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
         });
     }
 
+    private static FontAwesomeIcon ContextIcon(ChatContext context) => context switch
+    {
+        ChatContext.Dungeon => FontAwesomeIcon.Dungeon,
+        ChatContext.Raid => FontAwesomeIcon.Dragon,
+        ChatContext.Town => FontAwesomeIcon.City,
+        _ => FontAwesomeIcon.MapMarkerAlt,
+    };
+
     // =================================================================== Affichage
 
     private void DrawDisplayPage()
@@ -871,6 +1048,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         switch (displaySection)
         {
             case 0:
+                SectionTitle("Messages", FontAwesomeIcon.Comments);
                 Card(() =>
                 {
                     changed |= ToggleRow("Afficher l'heure", null, Cfg.ShowTimestamps, v => Cfg.ShowTimestamps = v);
@@ -901,7 +1079,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     changed |= ToggleRow("Séparateurs", "Une ligne quand la date change.", Cfg.ShowSeparators, v => Cfg.ShowSeparators = v);
                 });
 
-                SectionTitle("Saisie");
+                SectionTitle("Saisie", FontAwesomeIcon.Keyboard);
                 Card(() =>
                 {
                     changed |= ToggleRow("Garder le focus après l'envoi", "Pour enchaîner les messages. Désactivé : le jeu reprend le clavier, comme d'habitude.", Cfg.KeepFocusAfterSend, v => Cfg.KeepFocusAfterSend = v);
@@ -909,13 +1087,13 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     changed |= ToggleRow("Aperçu avant l'envoi", "Montre ce que donneront <t>, <flag> et les autres raccourcis du jeu.", Cfg.ShowMacroPreview, v => Cfg.ShowMacroPreview = v);
                 });
 
-                SectionTitle("Fenêtre");
+                SectionTitle("Fenêtre", FontAwesomeIcon.WindowMaximize);
                 Card(() =>
                 {
                     changed |= SliderRow("Opacité du fond", "0 = fond complètement retiré.", Cfg.WindowOpacity, 0f, 1f, "%.2f", v => Cfg.WindowOpacity = v);
                 });
 
-                SectionTitle("Objets");
+                SectionTitle("Objets", FontAwesomeIcon.Coins);
                 Card(() =>
                 {
                     changed |= ToggleRow("Prix du marché au survol",
@@ -925,16 +1103,16 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 break;
 
             default:
+                SectionTitle("Interface", FontAwesomeIcon.Desktop);
                 Card(() =>
                 {
-                    CardLabel("Interface");
                     changed |= ColorRow("Couleur d'accent", "Onglet actif, mentions, réglages.", Cfg.AccentColor, v => Cfg.AccentColor = v);
                     changed |= ColorRow("Texte secondaire", "L'heure des messages, les séparateurs de date, les compteurs (« x3 », messages épinglés) et la catégorie des autotraductions.", Cfg.SecondaryColor, v => Cfg.SecondaryColor = v);
                 });
 
+                SectionTitle("Canaux", FontAwesomeIcon.Comments);
                 Card(() =>
                 {
-                    CardLabel("Canaux");
                     changed |= ToggleRow("Reprendre les couleurs du jeu", "Celles de Configuration des personnages > Chat.", Cfg.UseGameColors, v => Cfg.UseGameColors = v);
                     TextDimmed("Une couleur choisie ici passe avant celle du jeu.");
                     foreach (var kind in new[]
@@ -997,7 +1175,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         var changed = false;
         var mentionsChanged = false;
 
-        SectionTitle("Mentions");
+        SectionTitle("Mentions", FontAwesomeIcon.At);
         Card(() =>
         {
             if (ToggleRow("Me signaler quand on me cite", "Le message est surligné quand il contient ton nom ou ton prénom.", Cfg.MentionOwnName, v => Cfg.MentionOwnName = v))
@@ -1009,7 +1187,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                 mentionsChanged = true;
         });
 
-        SectionTitle("Sons");
+        SectionTitle("Sons", FontAwesomeIcon.VolumeUp);
         Card(() =>
         {
             changed |= ToggleRow("Son à la réception d'un message privé", null, Cfg.SoundOnTell, v => Cfg.SoundOnTell = v);
@@ -1099,7 +1277,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
         var changed = false;
 
-        SectionTitle("Couleur par joueur");
+        SectionTitle("Couleur par joueur", FontAwesomeIcon.Palette);
         Card(() =>
         {
             TextDimmed("Pour repérer tes amis ou ton groupe statique. Clique aussi sur un nom dans le chat pour lui choisir une couleur.");
@@ -1134,7 +1312,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             }
         });
 
-        SectionTitle("Joueurs masqués");
+        SectionTitle("Joueurs masqués", FontAwesomeIcon.UserSlash);
         Card(() =>
         {
             if (Cfg.MutedPlayers.Count == 0)
@@ -1169,7 +1347,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
         var changed = false;
 
-        SectionTitle("Anti-spam");
+        SectionTitle("Anti-spam", FontAwesomeIcon.ShieldAlt);
         Card(() =>
         {
             if (ToggleRow("Regrouper les messages répétés", "Le même message du même joueur devient une seule ligne, avec « x3 ».", Cfg.CollapseRepeats, v => Cfg.CollapseRepeats = v))
@@ -1187,7 +1365,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             }
         });
 
-        SectionTitle("Historique");
+        SectionTitle("Historique", FontAwesomeIcon.History);
         Card(() =>
         {
             changed |= ToggleRow("Garder les messages entre deux sessions", "Sur ton PC uniquement, un fichier par personnage. Le combat n'est jamais enregistré.", Cfg.KeepHistory, v => Cfg.KeepHistory = v);
@@ -1239,17 +1417,17 @@ public sealed partial class ConfigWindow : Window, IDisposable
             ImGui.EndGroup();
         });
 
+        SectionTitle("Commandes", FontAwesomeIcon.Terminal);
         Card(() =>
         {
-            CardLabel("Commandes");
             CommandRow("/bchat", "Affiche ou masque le chat (masqué, celui du jeu revient)");
             CommandRow("/bchat config", "Ouvre ces réglages");
             CommandRow("/bchat debug", "Affiche les compteurs de diagnostic dans le chat");
         });
 
+        SectionTitle("Diagnostic", FontAwesomeIcon.Stethoscope);
         Card(() =>
         {
-            CardLabel("Diagnostic");
             var game = plugin.Game;
             TextDimmed($"Ouvertures du chat vues : {game.Activations}  |  messages en mémoire : {plugin.Messages.Lines.Count}");
             TextDimmed("Si Entrée n'ouvre plus la saisie alors que ce compteur reste à zéro, le jeu a sans doute changé : clique dans la zone de saisie, et signale-le sur GitHub.");

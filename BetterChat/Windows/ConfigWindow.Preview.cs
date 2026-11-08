@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
 using BetterChat.Core;
 
@@ -18,6 +19,7 @@ public sealed partial class ConfigWindow
         previewList ??= new MessageList(plugin) { Interactive = false };
         previewFeed ??= PreviewFeed();
 
+        SectionTitle("Aperçu", FontAwesomeIcon.Eye, "En direct");
         Card(() =>
         {
             var font = plugin.ChatFont();
@@ -33,9 +35,13 @@ public sealed partial class ConfigWindow
             var drawList = ImGui.GetWindowDrawList();
 
             // Un décor coloré derrière, comme le jeu : l'opacité du fond et le contour se jugent dessus.
-            drawList.AddRectFilledMultiColor(min, max,
-                                             Col(new Vector4(0.22f, 0.36f, 0.52f, 1f)), Col(new Vector4(0.36f, 0.44f, 0.60f, 1f)),
-                                             Col(new Vector4(0.56f, 0.43f, 0.30f, 1f)), Col(new Vector4(0.30f, 0.37f, 0.30f, 1f)));
+            // Un fond bleu crépuscule arrondi, réchauffé par un halo orangé et un halo vert.
+            drawList.AddRectFilled(min, max, Col(new Vector4(0.24f, 0.33f, 0.47f, 1f)), 14f * S);
+            drawList.PushClipRect(min, max, true);
+            var size = max - min;
+            SoftCircle(drawList, min + new Vector2(size.X * 0.82f, size.Y * 0.95f), size.X * 0.45f, new Vector4(0.85f, 0.55f, 0.30f, 1f), 0.30f);
+            SoftCircle(drawList, min + new Vector2(size.X * 0.15f, size.Y * 0.90f), size.X * 0.35f, new Vector4(0.35f, 0.55f, 0.40f, 1f), 0.25f);
+            drawList.PopClipRect();
 
             var chatMin = min + new Vector2(inset, inset);
             var chatMax = max - new Vector2(inset, inset);
@@ -47,7 +53,7 @@ public sealed partial class ConfigWindow
 
             ImGui.SetCursorScreenPos(new Vector2(min.X, max.Y));
             ImGui.Dummy(new Vector2(cardInner, 0f));
-        });
+        }, glow: true);
     }
 
     private static ChatFeed PreviewFeed()
