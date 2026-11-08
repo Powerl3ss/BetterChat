@@ -241,8 +241,7 @@ public sealed partial class ConfigWindow
         cardInner = previousInner;
         var bottomLocal = startLocal.Y + (bottom - start.Y);
         lastCardBottom = bottomLocal;
-        ImGui.SetCursorPos(new Vector2(startLocal.X, bottomLocal));
-        ImGui.Dummy(new Vector2(w, spacingAfter ? GapAfterPanel : 0f));
+        EndAt(startLocal.X, bottomLocal, w, spacingAfter);
         return bottomLocal;
     }
 
@@ -327,6 +326,18 @@ public sealed partial class ConfigWindow
     // Bas du dernier panneau dessiné, en position locale.
     private float lastCardBottom;
 
+    /// <summary>
+    /// Termine un bloc à ce bas exact : la page ne s'étend pas plus loin que lui (le dernier panneau tombe pile sur le
+    /// bas de la fenêtre). L'écart avec le bloc suivant ne s'ajoute qu'en déplaçant le curseur.
+    /// </summary>
+    private static void EndAt(float x, float bottom, float width, bool spacingAfter)
+    {
+        ImGui.SetCursorPos(new Vector2(x, bottom));
+        ImGui.Dummy(new Vector2(width, 0f));
+        if (spacingAfter)
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + GapAfterPanel);
+    }
+
     /// <summary>L'espace sous un panneau : avec l'espacement d'ImGui, il égale l'écart entre deux panneaux côte à côte.</summary>
     private static float GapAfterPanel => MathF.Max(0f, PanelGap - ImGui.GetStyle().ItemSpacing.Y);
 
@@ -358,8 +369,7 @@ public sealed partial class ConfigWindow
         rowMinHeight = 0f;
         pageWidth = previousPage;
         rowHeights[id] = tallest;
-        ImGui.SetCursorPos(new Vector2(start.X, bottom));
-        ImGui.Dummy(new Vector2(pageWidth, GapAfterPanel));
+        EndAt(start.X, bottom, pageWidth, spacingAfter: true);
     }
 
     // Hauteur à donner aux panneaux de la rangée en cours (0 hors rangée).

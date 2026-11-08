@@ -237,10 +237,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
         drawList.AddRect(sidebarMin, sidebarMax, Col(Line), PanelRounding);
         DrawSidebar(sidebarMin, sidebarMax);
 
+        // Les pages défilent entre les mêmes marges que la barre latérale : leurs panneaux s'alignent sur elle en haut
+        // et en bas.
         var pageX = margin + sidebarW;
-        ImGui.SetCursorPos(new Vector2(pageX, 0f));
-        using (var child = ImRaii.Child("##page", new Vector2(size.X - pageX, size.Y), false))
+        ImGui.SetCursorPos(new Vector2(pageX, margin));
+        var noPadding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        using (var child = ImRaii.Child("##page", new Vector2(size.X - pageX, size.Y - margin * 2f), false))
         {
+            noPadding.Dispose();
             if (child.Success)
                 DrawPage();
         }
@@ -366,7 +370,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             ImGui.SetScrollY(0);
         using var fade = ImRaii.PushStyle(ImGuiStyleVar.Alpha, Math.Max(0.02f, appear) * ImGui.GetStyle().Alpha);
 
-        ImGui.SetCursorPos(new Vector2(pad, pad + 6f * S + (1f - appear) * 16f * S));
+        ImGui.SetCursorPos(new Vector2(pad, (1f - appear) * 16f * S));
         ImGui.BeginGroup();
         switch (page)
         {
@@ -379,8 +383,9 @@ public sealed partial class ConfigWindow : Window, IDisposable
             case Page.History: DrawHistoryPage(); break;
             case Page.About: DrawAboutPage(); break;
         }
+        // La page s'arrête au bas de son dernier élément, sans marge en plus.
+        ImGui.SetCursorScreenPos(new Vector2(ImGui.GetCursorScreenPos().X, ImGui.GetItemRectMax().Y));
         ImGui.EndGroup();
-        ImGui.Dummy(new Vector2(0, pad));
         DrawConfirmPopup();
     }
 
