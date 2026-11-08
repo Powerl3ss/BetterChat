@@ -269,14 +269,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         if (IconButton("##close", FontAwesomeIcon.Times))
             IsOpen = false;
 
-        // Le personnage connecté, ou hors ligne.
-        y += logoSize + 12f * S;
-        var loggedIn = Plugin.CurrentCharacterId != 0;
-        var dotY = origin.Y + y + ImGui.GetTextLineHeight() / 2f;
-        drawList.AddCircleFilled(new Vector2(origin.X + x + 4f * S, dotY), 3.5f * S, Col(loggedIn ? Success : TextFaint));
-        ImGui.SetCursorPos(new Vector2(x + 14f * S, y));
-        ImGui.TextColored(TextDim, loggedIn ? plugin.LocalName : "Hors ligne");
-        y += ImGui.GetTextLineHeight() + 18f * S;
+        y += logoSize + 22f * S;
 
         // Les pages, par groupe. Le surlignage de la page active glisse jusqu'à la nouvelle.
         var itemH = 36f * S;
