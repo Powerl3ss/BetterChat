@@ -394,6 +394,7 @@ public static class Tip
         menuId = id;
         menuNeeded = 0f;
         menuJustSeparated = true; // en haut du menu, un titre de groupe n'a pas besoin d'air en plus
+        menuHasSections = false;
         ImGui.Dummy(new Vector2(0, 1f * S));
         return true;
     }
@@ -426,15 +427,18 @@ public static class Tip
     {
         ImGui.Dummy(new Vector2(0, (menuJustSeparated ? 1f : 6f) * S));
         menuJustSeparated = false;
+        menuHasSections = true;
         // Le titre du groupe part plus à gauche que les lignes, qui sont en retrait sous lui.
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 4f * S);
         ImGui.TextColored(Dim, text.ToUpperInvariant());
         menuNeeded = MathF.Max(menuNeeded, ImGui.CalcTextSize(text.ToUpperInvariant()).X + 20f * S);
     }
 
-    // Colonnes des lignes de menu : le centre des icônes, puis le début du texte. En retrait sous les titres de groupe.
-    private static float MenuIconX => 20f * S;
-    private static float MenuTextX => 36f * S;
+    // Colonnes des lignes de menu : le centre des icônes, puis le début du texte. En retrait seulement sous des titres
+    // de groupe ; sans titre, les lignes restent collées à gauche.
+    private static bool menuHasSections;
+    private static float MenuIconX => (menuHasSections ? 20f : 14f) * S;
+    private static float MenuTextX => (menuHasSections ? 36f : 30f) * S;
 
     // Juste sous la séparation ou en haut du menu, un titre de groupe n'a pas besoin d'air en plus.
     private static bool menuJustSeparated;
