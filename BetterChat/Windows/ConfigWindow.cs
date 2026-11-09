@@ -169,7 +169,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         windowStyle = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero)
                             .Push(ImGuiStyleVar.WindowRounding, 22f * S)
                             .Push(ImGuiStyleVar.WindowBorderSize, 1f);
-        windowColors = ImRaii.PushColor(ImGuiCol.WindowBg, WindowBg)
+        windowColors = ImRaii.PushColor(ImGuiCol.WindowBg, WindowBg with { W = Math.Clamp(Cfg.SettingsOpacity, 0f, 1f) })
                              .Push(ImGuiCol.Border, Line);
 
         // Repli / dépli animé de la fenêtre.
@@ -467,6 +467,18 @@ public sealed partial class ConfigWindow : Window, IDisposable
                     });
                     changed |= ToggleRow("Masquer le chat du jeu", "Désactivé, les deux chats sont affichés côte à côte.", Cfg.HideNativeChat, v => Cfg.HideNativeChat = v);
                     changed |= ToggleRow("Fond animé des réglages", "Halos lumineux et particules derrière cette fenêtre.", Cfg.AnimatedSettingsBackground, v => Cfg.AnimatedSettingsBackground = v);
+
+                    // Sous son titre, sur toute la largeur : le panneau est trop étroit pour les mettre côte à côte.
+                    SettingRow("Opacité du fond des réglages", "Derrière les panneaux. 0 % : le jeu se voit entièrement.", 0f, null);
+                    var opacity = Cfg.SettingsOpacity * 100f;
+                    ImGui.SetNextItemWidth(cardInner);
+                    if (ImGui.SliderFloat("##settingsOpacity", ref opacity, 0f, 100f, "%.0f %%"))
+                    {
+                        Cfg.SettingsOpacity = Math.Clamp(MathF.Round(opacity) / 100f, 0f, 1f);
+                        changed = true;
+                    }
+
+                    ImGui.Dummy(new Vector2(0f, 4f * S));
                     SettingRow("Présentation", "Moderne : le nom au-dessus des messages. Compacte : tout sur une ligne.", 0f, null);
                     var style = (int)Cfg.Style;
                     var chosen = Segmented("##homeStyle", new[]

@@ -93,6 +93,7 @@ public class Configuration : IPluginConfiguration
 
     // --- Fenêtre de réglages ---
     public bool AnimatedSettingsBackground { get; set; } = true;
+    public float SettingsOpacity { get; set; } = 0.80f; // fond de la fenêtre des réglages (les panneaux restent pleins)
 
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 }
