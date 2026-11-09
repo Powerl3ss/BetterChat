@@ -426,10 +426,15 @@ public static class Tip
     {
         ImGui.Dummy(new Vector2(0, (menuJustSeparated ? 1f : 6f) * S));
         menuJustSeparated = false;
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10f * S);
+        // Le titre du groupe part plus à gauche que les lignes, qui sont en retrait sous lui.
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 4f * S);
         ImGui.TextColored(Dim, text.ToUpperInvariant());
         menuNeeded = MathF.Max(menuNeeded, ImGui.CalcTextSize(text.ToUpperInvariant()).X + 20f * S);
     }
+
+    // Colonnes des lignes de menu : le centre des icônes, puis le début du texte. En retrait sous les titres de groupe.
+    private static float MenuIconX => 20f * S;
+    private static float MenuTextX => 36f * S;
 
     // Juste sous la séparation ou en haut du menu, un titre de groupe n'a pas besoin d'air en plus.
     private static bool menuJustSeparated;
@@ -454,7 +459,7 @@ public static class Tip
         var rowH = MenuRowHeight;
         var labelW = ImGui.CalcTextSize(label).X;
         var rightW = toggled.HasValue ? 26f * S : selected ? 14f * S : shortcut is { Length: > 0 } ? ImGui.CalcTextSize(shortcut).X : 0f;
-        menuNeeded = MathF.Max(menuNeeded, 30f * S + labelW + (rightW > 0 ? 24f * S + rightW : 0f) + 12f * S);
+        menuNeeded = MathF.Max(menuNeeded, MenuTextX + labelW + (rightW > 0 ? 24f * S + rightW : 0f) + 12f * S);
 
         var width = MenuWidth;
         var min = ImGui.GetCursorScreenPos();
@@ -470,7 +475,7 @@ public static class Tip
 
         var lineH = ImGui.GetTextLineHeight();
         var centerY = min.Y + rowH / 2f;
-        var textPos = new Vector2(min.X + 30f * S, min.Y + MathF.Floor((rowH - lineH) / 2f));
+        var textPos = new Vector2(min.X + MenuTextX, min.Y + MathF.Floor((rowH - lineH) / 2f));
         var textMiddle = textPos.Y + CapMiddle();
 
         // Icône dans une colonne fixe : le centre de son dessin (et non de sa case) est le même pour toutes les icônes,
@@ -481,7 +486,7 @@ public static class Tip
             var drawSize = ImGui.GetFontSize() * 0.8f;
             var (inkMin, inkMax) = GlyphInk(glyph[0], drawSize);
             var iconColor = danger ? Bad : hovered || selected || toggled == true ? Accent : Dim;
-            var pos = new Vector2(MathF.Round(min.X + 14f * S - (inkMin.X + inkMax.X) / 2f),
+            var pos = new Vector2(MathF.Round(min.X + MenuIconX - (inkMin.X + inkMax.X) / 2f),
                                   MathF.Round(textMiddle - (inkMin.Y + inkMax.Y) / 2f));
             dl.AddText(ImGui.GetFont(), drawSize, pos, ImGui.GetColorU32(iconColor), glyph);
         }
