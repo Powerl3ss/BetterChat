@@ -1418,14 +1418,14 @@ public sealed partial class ConfigWindow : Window, IDisposable
             Util.OpenLink(RepoUrl);
     }
 
+    /// <summary>Une commande et ce qu'elle fait, sur une ligne simple : les commandes se suivent de près.</summary>
     private void CommandRow(string command, string description)
     {
-        Row(() =>
+        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(16f * S, 4f * S)))
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, Accent))
-                ImGui.TextUnformatted(command);
-            ImGui.SameLine(0, 16f * S);
+            ImGui.TextColored(Accent, command);
+            ImGui.SameLine();
             ImGui.TextColored(TextDim, description);
-        }, 0f, null);
+        }
     }
 }
