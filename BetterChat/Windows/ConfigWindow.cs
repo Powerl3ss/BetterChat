@@ -28,7 +28,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         {
             (Page.Home, FontAwesomeIcon.Home, "Accueil"),
             (Page.Tabs, FontAwesomeIcon.Columns, "Onglets"),
-            (Page.Context, FontAwesomeIcon.MapMarkedAlt, "Selon le contexte"),
+            (Page.Context, FontAwesomeIcon.MapMarkedAlt, "Contexte"),
         }),
         ("Apparence", new[]
         {
@@ -276,24 +276,24 @@ public sealed partial class ConfigWindow : Window, IDisposable
         y += logoSize + 22f * S;
 
         // Les pages, par groupe. Le surlignage de la page active glisse jusqu'à la nouvelle.
-        var itemH = 36f * S;
+        var itemH = 33f * S;
         var activeY = y;
         var positions = new List<(Page Page, FontAwesomeIcon Icon, string Label, float Y)>();
         foreach (var (group, items) in Navigation)
         {
             ImGui.SetCursorPos(new Vector2(x + 8f * S, y));
             ImGui.TextColored(TextFaint, group.ToUpperInvariant());
-            y += ImGui.GetTextLineHeight() + 6f * S;
+            y += ImGui.GetTextLineHeight() + 4f * S;
 
             foreach (var (target, icon, label) in items)
             {
                 positions.Add((target, icon, label, y));
                 if (target == page)
                     activeY = y;
-                y += itemH + 2f * S;
+                y += itemH + 1f * S;
             }
 
-            y += 10f * S;
+            y += 8f * S;
         }
 
         var slide = Animate(ImGui.GetID("##navHighlight"), activeY, 18f);
