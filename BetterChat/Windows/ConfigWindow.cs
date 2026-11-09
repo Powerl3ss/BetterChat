@@ -281,8 +281,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
         var positions = new List<(Page Page, FontAwesomeIcon Icon, string Label, float Y)>();
         foreach (var (group, items) in Navigation)
         {
-            // Le petit titre du groupe commence au bord du dessin des icônes.
-            ImGui.SetCursorPos(new Vector2(MathF.Round(x + 4f * S + itemH / 2f - IconGlyphSize(FontAwesomeIcon.Home).X / 2f), y));
+            ImGui.SetCursorPos(new Vector2(x + 8f * S, y));
             ImGui.TextColored(TextFaint, group.ToUpperInvariant());
             y += ImGui.GetTextLineHeight() + 4f * S;
 
