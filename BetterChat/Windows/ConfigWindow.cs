@@ -281,7 +281,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
         var positions = new List<(Page Page, FontAwesomeIcon Icon, string Label, float Y)>();
         foreach (var (group, items) in Navigation)
         {
-            ImGui.SetCursorPos(new Vector2(x + 8f * S, y));
+            // Le petit titre du groupe commence au bord du dessin des icônes.
+            ImGui.SetCursorPos(new Vector2(MathF.Round(x + 4f * S + itemH / 2f - IconGlyphSize(FontAwesomeIcon.Home).X / 2f), y));
             ImGui.TextColored(TextFaint, group.ToUpperInvariant());
             y += ImGui.GetTextLineHeight() + 4f * S;
 
@@ -315,7 +316,8 @@ public sealed partial class ConfigWindow : Window, IDisposable
 
             var iconBox = new Vector2(itemH, itemH);
             DrawIconCentered(icon, itemMin + new Vector2(4f * S, 0f), itemMin + new Vector2(4f * S, 0f) + iconBox, active ? Accent : hovered ? TextMain : TextDim);
-            var textY = MathF.Round(itemMin.Y + (itemH - ImGui.GetTextLineHeight()) / 2f);
+            // L'icône et les majuscules du texte sont centrées sur le milieu de la ligne, chacune sur son dessin.
+            var textY = MathF.Round(itemMin.Y + itemH / 2f - CapMiddle());
             drawList.AddText(new Vector2(itemMin.X + itemH + 4f * S, textY), Col(active || hovered ? TextMain : TextDim), label);
         }
 

@@ -151,6 +151,21 @@ public sealed partial class ConfigWindow
         return (new Vector2(MathF.Round(position.X), MathF.Round(position.Y)), middle);
     }
 
+    /// <summary>
+    /// Milieu du dessin des majuscules de la police active, depuis le haut de la ligne : le centre visuel du texte,
+    /// plus bas que le milieu de sa case (qui garde de la place pour les accents).
+    /// </summary>
+    private static unsafe float CapMiddle()
+    {
+        var font = ImGui.GetFont();
+        var glyph = font.FindGlyph('E');
+        if (glyph == null || font.FontSize <= 0f)
+            return ImGui.GetTextLineHeight() / 2f;
+
+        var scale = ImGui.GetFontSize() / font.FontSize;
+        return (glyph->Y0 + glyph->Y1) * scale / 2f;
+    }
+
     /// <summary>Icône + texte centrés dans un rectangle.</summary>
     private static void DrawIconLabel(FontAwesomeIcon? icon, string label, Vector2 min, Vector2 max, Vector4 color)
     {
