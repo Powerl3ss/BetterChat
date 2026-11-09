@@ -202,7 +202,7 @@ public sealed partial class ConfigWindow
     // ------------------------------------------------------------------ Mise en page
 
     // En-tête du prochain panneau, posé par SectionTitle : une pastille d'icône, un titre, et à droite une étiquette.
-    private (string Title, FontAwesomeIcon Icon, string? Right)? pendingHeader;
+    private (string Title, FontAwesomeIcon Icon, string? Right, Vector4? Tint)? pendingHeader;
 
     // Hauteur naturelle (sans hauteur minimale) du dernier panneau dessiné : sert à aligner les panneaux d'une rangée.
     private float lastCardNaturalHeight;
@@ -232,7 +232,7 @@ public sealed partial class ConfigWindow
         ImGui.BeginGroup();
         ImGui.PushTextWrapPos(startLocal.X + pad + cardInner);
         if (header is { } h)
-            PanelHeader(h.Title, h.Icon, h.Right);
+            PanelHeader(h.Title, h.Icon, h.Right, h.Tint);
         content();
         ImGui.PopTextWrapPos();
         ImGui.EndGroup();
@@ -394,19 +394,22 @@ public sealed partial class ConfigWindow
     private void RowCard(float width, Action content, bool glow = false) =>
         Card(content, width, spacingAfter: false, glow: glow, minHeight: rowMinHeight);
 
-    /// <summary>Pastille ronde avec une icône, dans le ton de l'accent.</summary>
-    private void IconBadge(FontAwesomeIcon icon, float size)
+    /// <summary>Pastille ronde avec une icône, dans le ton de l'accent ou d'une autre couleur.</summary>
+    private void IconBadge(FontAwesomeIcon icon, float size, Vector4? tint = null)
     {
+        var color = (tint ?? Accent) with { W = 1f };
+        var pale = Vector4.Lerp(color, White, 0.72f) with { W = 1f };
+        var ink = Vector4.Lerp(color, DarkInk, 0.55f) with { W = 1f };
         var min = ImGui.GetCursorScreenPos();
         var max = min + new Vector2(size, size);
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddCircleFilled((min + max) / 2f, size / 2f, Col(AccentPale), 32);
+        drawList.AddCircleFilled((min + max) / 2f, size / 2f, Col(pale), 32);
         using (ImRaii.PushFont(UiBuilder.IconFont))
         {
             // L'icône à un peu moins de la moitié de la pastille, centrée sur son dessin.
             ImGui.SetWindowFontScale(size * 0.45f / MathF.Max(ImGui.GetFontSize(), 1f));
             var (position, _) = PlaceIcon(icon, min, max);
-            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), position, Col(AccentInk), icon.ToIconString());
+            drawList.AddText(ImGui.GetFont(), ImGui.GetFontSize(), position, Col(ink), icon.ToIconString());
             ImGui.SetWindowFontScale(1f);
         }
 
@@ -416,11 +419,11 @@ public sealed partial class ConfigWindow
     private static float BadgeSize => MathF.Round(30f * S);
 
     /// <summary>En-tête d'un panneau : pastille d'icône, titre, et une étiquette à droite.</summary>
-    private void PanelHeader(string title, FontAwesomeIcon icon, string? right)
+    private void PanelHeader(string title, FontAwesomeIcon icon, string? right, Vector4? tint = null)
     {
         var start = ImGui.GetCursorPos();
         var badge = BadgeSize;
-        IconBadge(icon, badge);
+        IconBadge(icon, badge, tint);
 
         ImGui.SetCursorPos(new Vector2(start.X + badge + 10f * S, start.Y + MathF.Round((badge - ImGui.GetTextLineHeight()) / 2f)));
         ImGui.TextUnformatted(title);
@@ -633,7 +636,8 @@ public sealed partial class ConfigWindow
     /// Le titre du prochain panneau : il s'affiche dans son en-tête, avec une pastille d'icône et, à droite, une
     /// étiquette (un compteur, un état...).
     /// </summary>
-    private void SectionTitle(string title, FontAwesomeIcon icon, string? right = null) => pendingHeader = (title, icon, right);
+    private void SectionTitle(string title, FontAwesomeIcon icon, string? right = null, Vector4? tint = null) =>
+        pendingHeader = (title, icon, right, tint);
 
     // ------------------------------------------------------------------ Contrôles
 
