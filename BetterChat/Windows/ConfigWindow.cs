@@ -1395,6 +1395,9 @@ public sealed partial class ConfigWindow : Window, IDisposable
             ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 2f * S);
             Chip($"Version {version}");
             TextDimmed("Tes messages partent par le chat du jeu, sur le même canal, avec les mêmes commandes. Le plugin ne change que ce que tu vois, et n'envoie rien sans que tu appuies sur Entrée.");
+            ImGui.Dummy(new Vector2(0f, 2f * S));
+            ImGui.TextUnformatted("Créé par Powerl3ss.");
+            TextDimmed("Claude, l'IA d'Anthropic, a grandement participé à son développement.");
             ImGui.EndGroup();
         });
 
