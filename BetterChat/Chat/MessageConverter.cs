@@ -52,6 +52,20 @@ internal static class MessageConverter
         var italic = false;
         ChatLink? link = null;
 
+        // Un lien colore son texte, mais le message ne referme pas toujours toutes ses couleurs : à la fin du lien, on
+        // revient aux couleurs d'avant lui. Si le message referme ensuite ces couleurs lui-même, ces fermetures sont
+        // ignorées (elles ont déjà été faites).
+        var depthBeforePush = 0;
+        var justPushed = false;
+        var linkDepth = -1;
+        var closedForLink = 0;
+
+        void StartLink()
+        {
+            // La couleur du lien est posée juste avant lui : le lien commence avant elle.
+            linkDepth = justPushed ? depthBeforePush : colors.Count;
+        }
+
         // Change de style : le texte accumulé devient un morceau.
         void Flush()
         {
@@ -69,10 +83,22 @@ internal static class MessageConverter
                 case UIForegroundPayload color:
                     Flush();
                     if (color.IsEnabled)
+                    {
+                        depthBeforePush = colors.Count;
                         colors.Push(ColorOf(color));
+                        justPushed = true;
+                        continue;
+                    }
+
+                    if (closedForLink > 0)
+                        closedForLink--;
                     else if (colors.Count > 0)
                         colors.Pop();
                     break;
+
+                case UIGlowPayload:
+                    // Le halo accompagne la couleur : il ne sépare pas une couleur de son lien.
+                    continue;
 
                 case EmphasisItalicPayload emphasis:
                     Flush();
@@ -81,43 +107,58 @@ internal static class MessageConverter
 
                 case PlayerPayload player:
                     Flush();
+                    StartLink();
                     link = ChatLink.Player(player.PlayerName, player.World.ValueNullable?.Name.ExtractText() ?? string.Empty);
                     firstPlayer ??= link;
                     break;
 
                 case ItemPayload item:
                     Flush();
+                    StartLink();
                     link = ChatLink.Item(item.ItemId, item.DisplayName ?? string.Empty);
                     break;
 
                 case MapLinkPayload map:
                     Flush();
+                    StartLink();
                     link = ChatLink.Map(map.TerritoryType.RowId, map.Map.RowId, map.RawX, map.RawY, map.PlaceName);
                     break;
 
                 case QuestPayload quest:
                     Flush();
+                    StartLink();
                     link = ChatLink.Quest(quest.Quest.RowId);
                     break;
 
                 case StatusPayload status:
                     Flush();
+                    StartLink();
                     link = ChatLink.Status(status.Status.RowId);
                     break;
 
                 case PartyFinderPayload listing when listing.LinkType != PartyFinderPayload.PartyFinderLinkType.PartyFinderNotification:
                     Flush();
+                    StartLink();
                     link = ChatLink.PartyFinder(listing.ListingId);
                     break;
 
                 case DalamudLinkPayload pluginLink:
                     Flush();
+                    StartLink();
                     link = ChatLink.PluginLink(pluginLink.Plugin, pluginLink.CommandId, LinkPayloads(text, pluginLink));
                     break;
 
                 case RawPayload raw when raw.Equals(RawPayload.LinkTerminator):
                     Flush();
                     link = null;
+                    closedForLink = 0;
+                    while (linkDepth >= 0 && colors.Count > linkDepth)
+                    {
+                        colors.Pop();
+                        closedForLink++;
+                    }
+
+                    linkDepth = -1;
                     break;
 
                 case IconPayload icon:
@@ -130,8 +171,11 @@ internal static class MessageConverter
 
                 case ITextProvider provider:
                     current.Append(provider.Text);
+                    closedForLink = 0;
                     break;
             }
+
+            justPushed = false;
         }
 
         Flush();
