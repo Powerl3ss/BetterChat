@@ -148,6 +148,12 @@ internal static class MessageConverter
                     link = ChatLink.PluginLink(pluginLink.Plugin, pluginLink.CommandId, LinkPayloads(text, pluginLink));
                     break;
 
+                case RawPayload raw when AchievementOf(raw) is { } achievement:
+                    Flush();
+                    StartLink();
+                    link = ChatLink.Achievement(achievement);
+                    break;
+
                 case RawPayload raw when raw.Equals(RawPayload.LinkTerminator):
                     Flush();
                     link = null;
@@ -198,6 +204,33 @@ internal static class MessageConverter
         {
             return Array.Empty<byte>();
         }
+    }
+
+    /// <summary>
+    /// Dalamud ne connaît pas les liens de haut fait : ils arrivent bruts. On y lit le type de lien et le numéro du
+    /// haut fait. Null : ce n'est pas un lien de haut fait.
+    /// </summary>
+    private static uint? AchievementOf(RawPayload raw)
+    {
+        try
+        {
+            foreach (var payload in new Lumina.Text.ReadOnly.ReadOnlySeString(raw.Data))
+            {
+                if (payload.Type != Lumina.Text.ReadOnly.ReadOnlySePayloadType.Macro || payload.MacroCode != Lumina.Text.Payloads.MacroCode.Link)
+                    continue;
+
+                if (payload.TryGetExpression(out var type, out var id) &&
+                    type.TryGetUInt(out var linkType) && linkType == (uint)Lumina.Text.Payloads.LinkMacroPayloadType.Achievement &&
+                    id.TryGetUInt(out var achievement) && achievement != 0)
+                    return achievement;
+            }
+        }
+        catch (Exception)
+        {
+            // Un morceau illisible n'est simplement pas un lien.
+        }
+
+        return null;
     }
 
     private static uint ColorOf(UIForegroundPayload payload)

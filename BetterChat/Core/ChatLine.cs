@@ -18,6 +18,8 @@ public enum LinkKind : byte
     PartyFinder = 7,
     /// <summary>Un lien ajouté par un plugin (« Show Death Recap »...) : le plugin réagit lui-même au clic.</summary>
     Plugin = 8,
+    /// <summary>Un haut fait accompli (« Vous avez accompli le haut fait... ») : le clic ouvre sa fiche.</summary>
+    Achievement = 9,
 }
 
 /// <summary>Ce qui se passe au clic sur un morceau de texte. Une seule classe, simple à enregistrer sur le disque.</summary>
@@ -56,6 +58,8 @@ public sealed class ChatLink
         new() { Kind = LinkKind.Map, Id = territory, MapId = map, RawX = rawX, RawY = rawY, Text = label };
     public static ChatLink Url(string url) => new() { Kind = LinkKind.Url, Text = url };
     public static ChatLink Quest(uint id) => new() { Kind = LinkKind.Quest, Id = id };
+
+    public static ChatLink Achievement(uint id) => new() { Kind = LinkKind.Achievement, Id = id };
     public static ChatLink Status(uint id) => new() { Kind = LinkKind.Status, Id = id };
     public static ChatLink PartyFinder(uint listingId) => new() { Kind = LinkKind.PartyFinder, Id = listingId };
 

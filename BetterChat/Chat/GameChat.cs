@@ -508,6 +508,17 @@ public sealed unsafe class GameChat : IDisposable
         }
     }
 
+    /// <summary>Ouvre la fiche du haut fait, comme un clic sur son nom dans le chat du jeu.</summary>
+    public static void OpenAchievement(uint achievementId)
+    {
+        unsafe
+        {
+            var agent = AgentAchievement.Instance();
+            if (agent != null)
+                agent->OpenById(achievementId);
+        }
+    }
+
     public static void OpenPartyFinder(uint listingId)
     {
         unsafe

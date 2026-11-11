@@ -903,6 +903,12 @@ public sealed class MessageList
             return;
         }
 
+        if (left && link.Kind == LinkKind.Achievement)
+        {
+            GameChat.OpenAchievement(link.Id);
+            return;
+        }
+
         if (left && link.Kind == LinkKind.PartyFinder)
         {
             GameChat.OpenPartyFinder(link.Id);
@@ -940,8 +946,28 @@ public sealed class MessageList
             case LinkKind.Status:
                 DrawStatusTooltip(link.Id);
                 break;
+            case LinkKind.Achievement:
+                DrawAchievementTooltip(link.Id);
+                break;
         }
     }
+
+    /// <summary>Le nom du haut fait et ce qu'il demande.</summary>
+    private static void DrawAchievementTooltip(uint achievementId)
+    {
+        var achievement = Plugin.DataManager.GetExcelSheet<Achievement>().GetRowOrDefault(achievementId);
+        if (achievement == null)
+            return;
+
+        using var tooltip = Tip.Begin();
+        Tip.Title(achievement.Value.Name.ExtractText());
+        var description = achievement.Value.Description.ExtractText();
+        if (description.Length > 0)
+            Tip.Note(description);
+    }
+
+    private static string AchievementName(uint achievementId) =>
+        Plugin.DataManager.GetExcelSheet<Achievement>().GetRowOrDefault(achievementId)?.Name.ExtractText() ?? string.Empty;
 
     private void DrawItemTooltip(uint itemId)
     {
@@ -1161,6 +1187,12 @@ public sealed class MessageList
                 case LinkKind.PartyFinder:
                     if (Tip.MenuItem("Ouvrir l'annonce", FontAwesomeIcon.Users))
                         GameChat.OpenPartyFinder(contextLink.Id);
+                    break;
+
+                case LinkKind.Achievement:
+                    if (Tip.MenuItem("Ouvrir le haut fait", FontAwesomeIcon.Trophy))
+                        GameChat.OpenAchievement(contextLink.Id);
+                    DrawCopyNameMenu(AchievementName(contextLink.Id));
                     break;
             }
 
